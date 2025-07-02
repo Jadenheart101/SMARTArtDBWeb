@@ -1,0 +1,29 @@
+{
+  "name": "smartartdbweb",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node start.js",
+    "dev": "node start.js",
+    "simple": "node index.js",
+    "inspect-db": "node inspect-db.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jadenheart101/SMARTArtDBWeb.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Jadenheart101/SMARTArtDBWeb/issues"
+  },
+  "homepage": "https://github.com/Jadenheart101/SMARTArtDBWeb#readme",
+  "description": "",
+  "dependencies": {
+    "dotenv": "^17.0.1",
+    "express": "^5.1.0",
+    "mysql2": "^3.14.1"
+  }
+}
