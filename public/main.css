@@ -1,0 +1,16 @@
+/* SMARTArt Database - Main CSS File */
+/* This file imports all component-specific CSS files */
+
+/* Global styles and utilities */
+@import url('css/global.css');
+
+/* Component styles */
+@import url('css/header.css');
+@import url('css/hero.css');
+@import url('css/features.css');
+@import url('css/gallery.css');
+@import url('css/api.css');
+@import url('css/contact.css');
+@import url('css/footer.css');
+@import url('css/dashboard.css');
+@import url('css/modal.css');

@@ -1,0 +1,54 @@
+<!-- Login/Sign Up Modal -->
+<div id="authModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeAuthModal()">&times;</span>
+        
+        <!-- Login Form -->
+        <div id="loginForm" class="auth-form active">
+            <h2><i class="fas fa-sign-in-alt"></i> Login</h2>
+            <form id="loginFormElement">
+                <div class="form-group">
+                    <label for="loginUsername">Username</label>
+                    <input type="text" id="loginUsername" name="username" placeholder="Enter your username" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" name="password" placeholder="Enter your password" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-full">
+                    <i class="fas fa-sign-in-alt"></i> Login
+                </button>
+            </form>
+            <p class="auth-switch">
+                Don't have an account? 
+                <a href="#" onclick="switchToSignup()">Sign up here</a>
+            </p>
+        </div>
+        
+        <!-- Sign Up Form -->
+        <div id="signupForm" class="auth-form">
+            <h2><i class="fas fa-user-plus"></i> Sign Up</h2>
+            <form id="signupFormElement">
+                <div class="form-group">
+                    <label for="signupUsername">Username</label>
+                    <input type="text" id="signupUsername" name="username" placeholder="Choose a username" required>
+                </div>
+                <div class="form-group">
+                    <label for="signupPassword">Password</label>
+                    <input type="password" id="signupPassword" name="password" placeholder="Choose a password" required>
+                </div>
+                <div class="form-group">
+                    <label for="confirmPassword">Confirm Password</label>
+                    <input type="password" id="confirmPassword" name="confirmPassword" placeholder="Confirm your password" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-full">
+                    <i class="fas fa-user-plus"></i> Sign Up
+                </button>
+            </form>
+            <p class="auth-switch">
+                Already have an account? 
+                <a href="#" onclick="switchToLogin()">Login here</a>
+            </p>
+        </div>
+    </div>
+</div>

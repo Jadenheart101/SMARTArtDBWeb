@@ -1,0 +1,95 @@
+<!-- Dashboard Section -->
+<section id="dashboard" class="dashboard">
+    <!-- Floating Logout Button -->
+    <div class="dashboard-logout">
+        <button class="btn btn-logout" onclick="logout()">
+            <i class="fas fa-sign-out-alt"></i> Logout
+        </button>
+    </div>
+
+    <div class="container">
+        <div class="dashboard-header">
+            <h1 class="dashboard-title">Welcome to SMARTArt Database</h1>
+            <p class="dashboard-subtitle">Your personal art management dashboard</p>
+        </div>
+        
+        <div class="dashboard-user-info">
+            <div class="user-card">
+                <div class="user-avatar">
+                    <i class="fas fa-user-circle"></i>
+                </div>
+                <div class="user-details">
+                    <h2 id="dashboard-username">Loading...</h2>
+                    <p id="dashboard-user-role">User</p>
+                    <p class="user-since">Member since <span id="dashboard-user-since">today</span></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-stats">
+
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-project-diagram"></i>
+                </div>
+                <div class="stat-content">
+                    <h3 id="user-projects-count">0</h3>
+                    <p>Your Projects</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-actions">
+            <div class="action-section">
+                <h3>Quick Actions</h3>
+                <div class="action-buttons">
+                    
+                    <button class="btn btn-secondary" onclick="showCreateProjectModal()">
+                        <i class="fas fa-folder-plus"></i> Create Project
+                    </button>
+                    <button class="btn btn-info" onclick="viewProfile()">
+                        <i class="fas fa-user-edit"></i> Edit Profile
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-recent">
+            <div class="recent-section">
+                <h3>Recent Activity</h3>
+                <div class="recent-items" id="recent-activity">
+                    <div class="recent-item">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Welcome to SMARTArt Database! Start by exploring the platform.</span>
+                        <small>Just now</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        
+    </div>
+</section>
+
+
+
+<!-- Create Project Modal -->
+<div id="createProjectModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeCreateProjectModal()">&times;</span>
+        <h2><i class="fas fa-folder-plus"></i> Create New Project</h2>
+        <form id="createProjectForm">
+            <div class="form-group">
+                <label for="projectName">Project Name</label>
+                <input type="text" id="projectName" name="projectName" placeholder="Enter project name" required>
+            </div>
+            <div class="form-group">
+                <label for="projectDescription">Description</label>
+                <textarea id="projectDescription" name="projectDescription" placeholder="Describe the project" rows="4"></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary btn-full">
+                <i class="fas fa-folder-plus"></i> Create Project
+            </button>
+        </form>
+    </div>
+</div>

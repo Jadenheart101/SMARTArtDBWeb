@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMARTArt Database - Digital Art Management Platform</title>
+    <link rel="stylesheet" href="main.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <!-- Loading indicator -->
+    <div id="loading" style="display: flex; justify-content: center; align-items: center; height: 100vh; background: #000; color: #00ff00;">
+        <div>
+            <i class="fas fa-spinner fa-spin" style="font-size: 2rem; margin-right: 1rem;"></i>
+            Loading SMARTArt Database...
+        </div>
+    </div>
+
+    <!-- Main content - hidden until components load -->
+    <div id="main-content" style="display: none;">
+        <!-- Dashboard Component (shown only when logged in) -->
+        <div id="dashboard-placeholder" style="display: none;"></div>
+        
+        <!-- Main Website Content (shown when not logged in) -->
+        <div id="website-content">
+            <!-- Header Component -->
+            <div id="header-placeholder"></div>
+
+            <!-- Hero Component -->
+            <div id="hero-placeholder"></div>
+
+            <!-- Features Component -->
+            <div id="features-placeholder"></div>
+
+            <!-- Gallery Component -->
+            <div id="gallery-placeholder"></div>
+
+            <!-- API Component -->
+            <div id="api-placeholder"></div>
+
+            <!-- Contact Component -->
+            <div id="contact-placeholder"></div>
+
+            <!-- Footer Component -->
+            <div id="footer-placeholder"></div>
+        </div>
+
+        <!-- Auth Modal Component -->
+        <div id="auth-modal-placeholder"></div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="components/loader.js"></script>
+    <script src="script.js"></script>
+    <script>
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // Load all components
+                await componentLoader.loadAllComponents();
+                
+                // Hide loading screen and show main content
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('main-content').style.display = 'block';
+                
+                // Initialize the main application
+                initializeApp();
+            } catch (error) {
+                console.error('Error initializing application:', error);
+                document.getElementById('loading').innerHTML = `
+                    <div style="text-align: center; color: #ff0000;">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 1rem;"></i>
+                        <br>Error loading application. Please refresh the page.
+                    </div>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>

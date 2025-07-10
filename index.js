@@ -9,6 +9,9 @@ const PORT = process.env.PORT || 8080;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Serve static files from public directory
+app.use(express.static('public'));
+
 // CORS middleware (for frontend-backend communication)
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
@@ -29,6 +32,7 @@ app.get('/api', (req, res) => {
       'GET /api/users': 'Get all users',
       'GET /api/users/:id': 'Get user by ID',
       'POST /api/users': 'Create new user',
+      'POST /api/login': 'Authenticate user',
       'PUT /api/users/:id': 'Update user',
       'DELETE /api/users/:id': 'Delete user',
       'GET /api/art': 'Get all artworks',
@@ -83,6 +87,45 @@ app.post('/api/users', async (req, res) => {
     res.status(201).json({ success: true, data: newUser[0] });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error creating user', error: error.message });
+  }
+});
+
+// Login endpoint
+app.post('/api/login', async (req, res) => {
+  const { username, password } = req.body;
+  
+  if (!username || !password) {
+    return res.status(400).json({ success: false, message: 'Username and password are required' });
+  }
+  
+  try {
+    const users = await executeQuery(
+      'SELECT UserID, UserName, Password, isAdmin FROM user WHERE UserName = ?',
+      [username]
+    );
+    
+    if (users.length === 0) {
+      return res.status(401).json({ success: false, message: 'Invalid username or password' });
+    }
+    
+    const user = users[0];
+    
+    // Check password (in a real app, you'd use bcrypt for hashed passwords)
+    if (user.Password !== password) {
+      return res.status(401).json({ success: false, message: 'Invalid username or password' });
+    }
+    
+    // Return user data without password
+    res.json({ 
+      success: true, 
+      data: {
+        UserID: user.UserID,
+        UserName: user.UserName,
+        isAdmin: user.isAdmin
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error during login', error: error.message });
   }
 });
 

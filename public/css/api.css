@@ -1,0 +1,103 @@
+/* API Section */
+.api-section {
+    padding: 5rem 0;
+    background: #1e293b;
+    color: white;
+}
+
+.api-section .section-title {
+    color: white;
+}
+
+.api-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+    align-items: start;
+}
+
+.api-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+    margin-top: 2rem;
+}
+
+.stat {
+    text-align: center;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+}
+
+.stat-number {
+    display: block;
+    font-size: 2rem;
+    font-weight: 700;
+    color: #6366f1;
+}
+
+.stat-label {
+    font-size: 0.9rem;
+    opacity: 0.8;
+}
+
+.endpoint-list {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1rem 0;
+}
+
+.endpoint-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.endpoint-item:last-child {
+    border-bottom: none;
+}
+
+.method {
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    min-width: 60px;
+    text-align: center;
+}
+
+.method.get {
+    background: #10b981;
+    color: white;
+}
+
+.method.post {
+    background: #f59e0b;
+    color: white;
+}
+
+.path {
+    font-family: 'Courier New', monospace;
+    color: #6366f1;
+    font-weight: 600;
+}
+
+.description {
+    color: #cbd5e1;
+    font-size: 0.9rem;
+}
+
+/* Responsive API */
+@media (max-width: 768px) {
+    .api-content {
+        grid-template-columns: 1fr;
+    }
+
+    .api-stats {
+        grid-template-columns: 1fr;
+    }
+}
