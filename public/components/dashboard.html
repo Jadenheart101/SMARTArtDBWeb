@@ -67,6 +67,38 @@
             </div>
         </div>
 
+        <!-- Media Management Section -->
+        <div class="dashboard-media">
+            <div class="media-section">
+                <h3>Media Library</h3>
+                <div class="media-actions">
+                    <button class="btn btn-primary" onclick="showUploadModal()">
+                        <i class="fas fa-cloud-upload-alt"></i> Upload Media
+                    </button>
+                    <button class="btn btn-info" onclick="refreshMediaGallery()">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+                
+                <div class="media-stats">
+                    <div class="stat-item">
+                        <span class="stat-number" id="total-media-count">0</span>
+                        <span class="stat-label">Total Files</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number" id="total-media-size">0 MB</span>
+                        <span class="stat-label">Storage Used</span>
+                    </div>
+                </div>
+
+                <div class="media-gallery" id="media-gallery">
+                    <div class="media-loading">
+                        <i class="fas fa-spinner fa-spin"></i> Loading media files...
+                    </div>
+                </div>
+            </div>
+        </div>
+
         
     </div>
 </section>
@@ -90,6 +122,88 @@
             <button type="submit" class="btn btn-primary btn-full">
                 <i class="fas fa-folder-plus"></i> Create Project
             </button>
+        </form>
+    </div>
+</div>
+
+<!-- Upload Media Modal -->
+<div id="uploadModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeUploadModal()">&times;</span>
+        <h2><i class="fas fa-cloud-upload-alt"></i> Upload Media File</h2>
+        <form id="uploadForm" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="mediaFile">Select File</label>
+                <input type="file" id="mediaFile" name="file" accept="image/*,audio/*,video/*" required>
+                <small>Supported formats: Images (JPEG, PNG, GIF, BMP, WebP), Audio (MP3, WAV, FLAC, AAC), Video (MP4, AVI, MOV, WMV, WebM)</small>
+            </div>
+            <div class="form-group">
+                <label for="folderPath">Folder Path (optional)</label>
+                <input type="text" id="folderPath" name="folderPath" placeholder="/SMARTArt" value="/SMARTArt">
+                <small>Organize your files in folders</small>
+            </div>
+            <div class="upload-progress" id="uploadProgress" style="display: none;">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-text" id="progressText">Uploading...</div>
+            </div>
+            <button type="submit" class="btn btn-primary btn-full" id="uploadBtn">
+                <i class="fas fa-cloud-upload-alt"></i> Upload File
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Media Preview Modal -->
+<div id="mediaPreviewModal" class="modal">
+    <div class="modal-content media-preview-content">
+        <span class="close" onclick="closeMediaPreviewModal()">&times;</span>
+        <div class="media-preview-header">
+            <h2 id="mediaPreviewTitle">Media Preview</h2>
+        </div>
+        <div class="media-preview-container" id="mediaPreviewContainer">
+            <!-- Media content will be loaded here -->
+        </div>
+        <div class="media-preview-actions">
+            <button class="btn btn-primary" onclick="downloadCurrentMedia()">
+                <i class="fas fa-download"></i> Download
+            </button>
+            <button class="btn btn-secondary" onclick="showRenameModal()">
+                <i class="fas fa-edit"></i> Rename
+            </button>
+            <button class="btn btn-danger" onclick="deleteCurrentMedia()">
+                <i class="fas fa-trash"></i> Delete
+            </button>
+        </div>
+        <div class="media-metadata-section">
+            <div class="metadata-toggle" onclick="toggleMetadata()">
+                <i class="fas fa-info-circle"></i> 
+                <span>File Information</span>
+                <i class="fas fa-chevron-down" id="metadataToggleIcon"></i>
+            </div>
+            <div class="media-preview-info collapsed" id="mediaPreviewInfo">
+                <!-- File info will be displayed here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Rename Modal -->
+<div id="renameModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeRenameModal()">&times;</span>
+        <h2>Rename File</h2>
+        <form id="renameForm">
+            <div class="form-group">
+                <label for="newFileName">New File Name:</label>
+                <input type="text" id="newFileName" name="newFileName" required>
+                <small class="form-help">Enter the new name without the file extension</small>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeRenameModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Rename</button>
+            </div>
         </form>
     </div>
 </div>

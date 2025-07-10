@@ -1,0 +1,4 @@
+/* Create Artwork/Project Modal Styles */
+#createArtworkModal, #createProjectModal {
+    z-index: 2000;
+}

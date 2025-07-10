@@ -1,0 +1,46 @@
+/* Dashboard User Information Card */
+.dashboard-user-info {
+    margin-bottom: 3rem;
+}
+
+.user-card {
+    background: rgba(255,255,255,0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 20px;
+    padding: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.user-avatar {
+    font-size: 4rem;
+    color: rgba(255,255,255,0.9);
+}
+
+.user-details h2 {
+    font-size: 1.8rem;
+    margin-bottom: 0.5rem;
+    color: white;
+}
+
+.user-details p {
+    color: rgba(255,255,255,0.8);
+    margin-bottom: 0.3rem;
+}
+
+.user-since {
+    font-size: 0.9rem;
+    opacity: 0.7;
+}
+
+/* Responsive User Card */
+@media (max-width: 768px) {
+    .user-card {
+        flex-direction: column;
+        text-align: center;
+    }
+}

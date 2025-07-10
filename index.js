@@ -1,9 +1,78 @@
 const express = require('express');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const { testConnection, executeQuery } = require('./database');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 8080;
+
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Serve uploaded files statically
+app.use('/uploads', express.static(uploadsDir));
+
+// Configure multer for local file uploads
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        const { userId } = req.body;
+        const userDir = path.join(uploadsDir, `user_${userId || 'anonymous'}`);
+        
+        // Create user directory if it doesn't exist
+        if (!fs.existsSync(userDir)) {
+            fs.mkdirSync(userDir, { recursive: true });
+        }
+        
+        // Create file type subdirectories
+        let typeDir = userDir;
+        if (file.mimetype.startsWith('image/')) {
+            typeDir = path.join(userDir, 'images');
+        } else if (file.mimetype.startsWith('video/')) {
+            typeDir = path.join(userDir, 'videos');
+        } else if (file.mimetype.startsWith('audio/')) {
+            typeDir = path.join(userDir, 'audio');
+        } else {
+            typeDir = path.join(userDir, 'files');
+        }
+        
+        if (!fs.existsSync(typeDir)) {
+            fs.mkdirSync(typeDir, { recursive: true });
+        }
+        
+        cb(null, typeDir);
+    },
+    filename: function (req, file, cb) {
+        // Generate unique filename with timestamp
+        const timestamp = Date.now();
+        const ext = path.extname(file.originalname);
+        const name = path.basename(file.originalname, ext);
+        cb(null, `${timestamp}_${name}${ext}`);
+    }
+});
+
+const upload = multer({
+    storage: storage,
+    limits: {
+        fileSize: 100 * 1024 * 1024 // 100MB limit
+    },
+    fileFilter: (req, file, cb) => {
+        // Allow images, audio, and video files
+        const allowedTypes = /jpeg|jpg|png|gif|bmp|webp|mp3|wav|flac|aac|mp4|avi|mov|wmv|webm/;
+        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+        const mimetype = allowedTypes.test(file.mimetype);
+        
+        if (mimetype && extname) {
+            return cb(null, true);
+        } else {
+            cb(new Error('Only image, audio, and video files are allowed!'));
+        }
+    }
+});
 
 // Middleware
 app.use(express.json());
@@ -43,7 +112,12 @@ app.get('/api', (req, res) => {
       'GET /api/projects': 'Get all projects',
       'POST /api/projects': 'Create new project',
       'GET /api/cards': 'Get all cards',
-      'POST /api/cards': 'Create new card'
+      'POST /api/cards': 'Create new card',
+      'POST /api/media/upload': 'Upload media file',
+      'GET /api/media/files': 'List user media files',
+      'GET /api/media/file/:fileId': 'Get media file info',
+      'DELETE /api/media/file/:fileId': 'Delete media file',
+      'GET /api/users/:userId/media': 'Get user media files'
     }
   });
 });
@@ -297,6 +371,266 @@ app.post('/api/cards', async (req, res) => {
     res.status(201).json({ success: true, data: newCard[0] });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error creating card', error: error.message });
+  }
+});
+
+// ========== Local Media Storage Endpoints ==========
+
+// Upload file locally
+app.post('/api/media/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+    
+    const { originalname, filename, mimetype, size, path: filePath } = req.file;
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'User ID is required' });
+    }
+    
+    // Generate file URL
+    const relativePath = path.relative(uploadsDir, filePath);
+    const fileUrl = `/uploads/${relativePath.replace(/\\/g, '/')}`;
+    
+    try {
+      // Generate a unique file_id for this upload
+      const uniqueFileId = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Store file info in database
+      const result = await executeQuery(
+        'INSERT INTO media_files (user_id, file_name, original_name, file_id, file_path, file_url, mime_type, file_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [userId, filename, originalname, uniqueFileId, filePath, fileUrl, mimetype, size]
+      );
+      
+      res.json({
+        success: true,
+        message: 'File uploaded successfully',
+        file: {
+          id: result.insertId,
+          name: filename,
+          originalName: originalname,
+          url: fileUrl,
+          size: size,
+          mimeType: mimetype,
+          uploadedAt: new Date().toISOString()
+        }
+      });
+    } catch (dbError) {
+      console.error('Error storing file info in database:', dbError);
+      // Delete the uploaded file if database insert fails
+      fs.unlinkSync(filePath);
+      res.status(500).json({ success: false, message: 'Failed to save file information' });
+    }
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({ success: false, message: 'Error uploading file', error: error.message });
+  }
+});
+
+// List user's media files
+app.get('/api/media/files', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'User ID is required' });
+    }
+    
+    const files = await executeQuery(
+      'SELECT * FROM media_files WHERE user_id = ? ORDER BY created_at DESC',
+      [userId]
+    );
+    
+    // Check if files still exist on disk and clean up database if not
+    const validFiles = [];
+    for (const file of files) {
+      // Only check file existence if file_path is provided (for local files)
+      const fileExists = !file.file_path || fs.existsSync(file.file_path);
+      
+      if (fileExists) {
+        validFiles.push({
+          id: file.id,
+          name: file.file_name,
+          originalName: file.original_name,
+          url: file.file_url || file.download_url, // fallback to download_url if file_url is null
+          size: file.file_size,
+          mimeType: file.mime_type,
+          createdAt: file.created_at
+        });
+      } else {
+        // Remove from database if file doesn't exist
+        await executeQuery('DELETE FROM media_files WHERE id = ?', [file.id]);
+      }
+    }
+    
+    res.json({ success: true, files: validFiles });
+  } catch (error) {
+    console.error('Error listing files:', error);
+    res.status(500).json({ success: false, message: 'Error listing files', error: error.message });
+  }
+});
+
+// Get specific media file info
+app.get('/api/media/file/:fileId', async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    
+    const files = await executeQuery('SELECT * FROM media_files WHERE id = ?', [fileId]);
+    
+    if (files.length === 0) {
+      return res.status(404).json({ success: false, message: 'File not found' });
+    }
+    
+    const file = files[0];
+    
+    // Check if file exists on disk
+    if (!fs.existsSync(file.file_path)) {
+      // Remove from database if file doesn't exist
+      await executeQuery('DELETE FROM media_files WHERE id = ?', [fileId]);
+      return res.status(404).json({ success: false, message: 'File not found on disk' });
+    }
+    
+    res.json({
+      success: true,
+      file: {
+        id: file.id,
+        name: file.file_name,
+        originalName: file.original_name,
+        url: file.file_url,
+        size: file.file_size,
+        mimeType: file.mime_type,
+        createdAt: file.created_at
+      }
+    });
+  } catch (error) {
+    console.error('Error getting file info:', error);
+    res.status(500).json({ success: false, message: 'Error getting file info', error: error.message });
+  }
+});
+
+// Rename media file
+app.put('/api/media/file/:fileId/rename', async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const { userId, newFileName, newOriginalName } = req.body;
+    
+    if (!userId || !newFileName) {
+      return res.status(400).json({ success: false, message: 'User ID and new filename are required' });
+    }
+    
+    // Get file info
+    const files = await executeQuery('SELECT * FROM media_files WHERE id = ? AND user_id = ?', [fileId, userId]);
+    
+    if (files.length === 0) {
+      return res.status(404).json({ success: false, message: 'File not found or access denied' });
+    }
+    
+    const file = files[0];
+    const oldPath = file.file_path;
+    
+    if (!oldPath) {
+      return res.status(400).json({ success: false, message: 'Cannot rename files without local storage' });
+    }
+    
+    try {
+      // Generate new file path
+      const dir = path.dirname(oldPath);
+      const timestamp = Date.now();
+      const ext = path.extname(newFileName);
+      const name = path.basename(newFileName, ext);
+      const newPath = path.join(dir, `${timestamp}_${name}${ext}`);
+      
+      // Rename file on disk
+      if (fs.existsSync(oldPath)) {
+        fs.renameSync(oldPath, newPath);
+      }
+      
+      // Generate new URL
+      const relativePath = path.relative(uploadsDir, newPath);
+      const newFileUrl = `/uploads/${relativePath.replace(/\\/g, '/')}`;
+      const newDbFileName = `${timestamp}_${name}${ext}`;
+      
+      // Update database
+      await executeQuery(
+        'UPDATE media_files SET file_name = ?, original_name = ?, file_path = ?, file_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        [newDbFileName, newOriginalName || newFileName, newPath, newFileUrl, fileId]
+      );
+      
+      res.json({
+        success: true,
+        message: 'File renamed successfully',
+        file: {
+          id: fileId,
+          name: newDbFileName,
+          originalName: newOriginalName || newFileName,
+          url: newFileUrl
+        }
+      });
+    } catch (fsError) {
+      console.error('Error renaming file:', fsError);
+      res.status(500).json({ success: false, message: 'Failed to rename file on disk' });
+    }
+  } catch (error) {
+    console.error('Rename error:', error);
+    res.status(500).json({ success: false, message: 'Error renaming file', error: error.message });
+  }
+});
+
+// Delete media file
+app.delete('/api/media/file/:fileId', async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'User ID is required' });
+    }
+    
+    // Get file info
+    const files = await executeQuery('SELECT * FROM media_files WHERE id = ? AND user_id = ?', [fileId, userId]);
+    
+    if (files.length === 0) {
+      return res.status(404).json({ success: false, message: 'File not found or access denied' });
+    }
+    
+    const file = files[0];
+    
+    try {
+      // Delete file from disk
+      if (fs.existsSync(file.file_path)) {
+        fs.unlinkSync(file.file_path);
+      }
+      
+      // Remove from database
+      await executeQuery('DELETE FROM media_files WHERE id = ?', [fileId]);
+      
+      res.json({ success: true, message: 'File deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      res.status(500).json({ success: false, message: 'Error deleting file' });
+    }
+  } catch (error) {
+    console.error('Delete error:', error);
+    res.status(500).json({ success: false, message: 'Error deleting file', error: error.message });
+  }
+});
+
+// Get user's media files (alternative endpoint)
+app.get('/api/users/:userId/media', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    const files = await executeQuery(
+      'SELECT * FROM media_files WHERE user_id = ? ORDER BY created_at DESC',
+      [userId]
+    );
+    
+    res.json({ success: true, files });
+  } catch (error) {
+    console.error('Error getting user media:', error);
+    res.status(500).json({ success: false, message: 'Error getting user media', error: error.message });
   }
 });
 

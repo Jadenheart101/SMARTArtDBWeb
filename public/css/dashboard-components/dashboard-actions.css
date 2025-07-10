@@ -1,0 +1,31 @@
+/* Dashboard Actions Section */
+.dashboard-actions {
+    margin-bottom: 3rem;
+}
+
+.action-section {
+    background: rgba(255,255,255,0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 15px;
+    padding: 2rem;
+}
+
+.action-section h3 {
+    color: white;
+    margin-bottom: 1.5rem;
+    font-size: 1.3rem;
+}
+
+.action-buttons {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+/* Responsive Actions */
+@media (max-width: 768px) {
+    .action-buttons {
+        grid-template-columns: 1fr;
+    }
+}

@@ -1,0 +1,42 @@
+/* Dashboard Layout and Structure */
+.dashboard {
+    padding: 80px 0 80px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+}
+
+.dashboard-header {
+    text-align: center;
+    margin-bottom: 3rem;
+    color: white;
+}
+
+.dashboard-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.dashboard-subtitle {
+    font-size: 1.2rem;
+    opacity: 0.9;
+    font-weight: 300;
+}
+
+/* Responsive Dashboard Layout */
+@media (max-width: 768px) {
+    .dashboard-title {
+        font-size: 2rem;
+    }
+    
+    .dashboard-subtitle {
+        font-size: 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .dashboard {
+        padding: 100px 0 60px;
+    }
+}

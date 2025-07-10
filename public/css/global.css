@@ -44,13 +44,14 @@ body {
 
 .btn-secondary {
     background: transparent;
-    color: #fff;
+    color: #6366f1;
     border: 2px solid #fff;
 }
 
 .btn-secondary:hover {
-    background: #fff;
-    color: #6366f1;
+    background: #f1f5f9;
+    transform: translateY(-2px);
+
 }
 
 .btn-auth {
