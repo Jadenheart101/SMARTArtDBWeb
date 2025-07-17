@@ -16,3 +16,6 @@ ADD COLUMN file_url VARCHAR(500);
 
 -- Update indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_file_path ON media_files(file_path(255));
+
+-- Migration: Add displayName to media_files table
+ALTER TABLE media_files ADD COLUMN displayName VARCHAR(255) DEFAULT NULL AFTER original_name;

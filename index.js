@@ -388,7 +388,7 @@ app.post('/api/media/upload', upload.single('file'), async (req, res) => {
     }
     
     const { originalname, filename, mimetype, size, path: filePath } = req.file;
-    const { userId } = req.body;
+    const { userId, customName } = req.body;
     
     if (!userId) {
       return res.status(400).json({ success: false, message: 'User ID is required' });
@@ -404,8 +404,8 @@ app.post('/api/media/upload', upload.single('file'), async (req, res) => {
       
       // Store file info in database
       const result = await executeQuery(
-        'INSERT INTO media_files (user_id, file_name, original_name, file_id, file_path, file_url, mime_type, file_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [userId, filename, originalname, uniqueFileId, filePath, fileUrl, mimetype, size]
+        'INSERT INTO media_files (user_id, file_name, original_name, displayName, file_id, file_path, file_url, mime_type, file_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [userId, filename, originalname, customName || null, uniqueFileId, filePath, fileUrl, mimetype, size]
       );
       
       res.json({
@@ -458,10 +458,11 @@ app.get('/api/media/files', async (req, res) => {
           id: file.id,
           name: file.file_name,
           originalName: file.original_name,
-          url: file.file_url || file.download_url, // fallback to download_url if file_url is null
-          size: file.file_size,
-          mimeType: file.mime_type,
-          createdAt: file.created_at
+                   customName: file.displayName,
+                   url: file.file_url || file.download_url, // fallback to download_url if file_url is null
+                   size: file.file_size,
+                   mimeType: file.mime_type,
+                   createdAt: file.created_at
         });
       } else {
         // Remove from database if file doesn't exist
