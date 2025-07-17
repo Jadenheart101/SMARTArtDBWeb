@@ -365,7 +365,7 @@ app.get('/api/projects', async (req, res) => {
       DateModified: project.DateModified,
       DateApproved: project.DateApproved,
       ImageID: project.image_id,
-      ImageURL: project.file_path ? `/${project.file_path}` : null,
+      ImageURL: project.file_url || (project.file_path ? `/uploads/${path.relative(uploadsDir, project.file_path).replace(/\\/g, '/')}` : null),
       ImageName: project.media_display_name || project.file_name
     }));
     
@@ -448,6 +448,7 @@ app.get('/api/projects/:id', async (req, res) => {
         p.*,
         m.file_name,
         m.file_path,
+        m.file_url,
         m.displayName as media_display_name
       FROM project p
       LEFT JOIN media_files m ON p.image_id = m.id
@@ -473,7 +474,7 @@ app.get('/api/projects/:id', async (req, res) => {
       DateModified: project.DateModified,
       DateApproved: project.DateApproved,
       ImageID: project.image_id, // Map image_id to ImageID
-      ImageURL: project.file_path ? `/${project.file_path}` : null, // Construct ImageURL from file_path
+      ImageURL: project.file_url || (project.file_path ? `/uploads/${path.relative(uploadsDir, project.file_path).replace(/\\/g, '/')}` : null), // Use file_url or construct from file_path
       ImageName: project.media_display_name || project.file_name
     };
     
