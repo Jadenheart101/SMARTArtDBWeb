@@ -110,7 +110,10 @@ app.get('/api', (req, res) => {
       'PUT /api/art/:id': 'Update artwork',
       'DELETE /api/art/:id': 'Delete artwork',
       'GET /api/projects': 'Get all projects',
+      'GET /api/projects/:id': 'Get project by ID',
       'POST /api/projects': 'Create new project',
+      'PUT /api/projects/:id': 'Update project',
+      'DELETE /api/projects/:id': 'Delete project',
       'GET /api/cards': 'Get all cards',
       'POST /api/cards': 'Create new card',
       'POST /api/media/upload': 'Upload media file',
@@ -318,13 +321,55 @@ app.get('/api/projects', async (req, res) => {
   try {
     // Support filtering by user_id via query param
     const userId = req.query.user_id;
-    let projects;
+    let query, params;
+    
+    // Join with media_files table to get image information
     if (userId) {
-      projects = await executeQuery('SELECT * FROM project WHERE user_id = ? ORDER BY ProjectID', [userId]);
+      query = `
+        SELECT 
+          p.*,
+          m.file_name,
+          m.file_path,
+          m.displayName as media_display_name
+        FROM project p
+        LEFT JOIN media_files m ON p.image_id = m.id
+        WHERE p.user_id = ?
+        ORDER BY p.ProjectID
+      `;
+      params = [userId];
     } else {
-      projects = await executeQuery('SELECT * FROM project ORDER BY ProjectID');
+      query = `
+        SELECT 
+          p.*,
+          m.file_name,
+          m.file_path,
+          m.displayName as media_display_name
+        FROM project p
+        LEFT JOIN media_files m ON p.image_id = m.id
+        ORDER BY p.ProjectID
+      `;
+      params = [];
     }
-    res.json({ success: true, data: projects });
+    
+    const projects = await executeQuery(query, params);
+    
+    // Map the results to include proper field names
+    const mappedProjects = projects.map(project => ({
+      ProjectID: project.ProjectID,
+      ProjectName: project.ProjectName,
+      Description: project.description !== undefined ? project.description : project.Description, // Handle both lowercase and uppercase
+      user_id: project.user_id,
+      Approved: project.Approved,
+      NeedsReview: project.NeedsReview,
+      DateCreated: project.DateCreated,
+      DateModified: project.DateModified,
+      DateApproved: project.DateApproved,
+      ImageID: project.image_id,
+      ImageURL: project.file_path ? `/${project.file_path}` : null,
+      ImageName: project.media_display_name || project.file_name
+    }));
+    
+    res.json({ success: true, data: mappedProjects });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error fetching projects', error: error.message });
   }
@@ -345,6 +390,128 @@ app.post('/api/projects', async (req, res) => {
     res.status(201).json({ success: true, data: newProject[0] });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error creating project', error: error.message });
+  }
+});
+
+// Update project
+app.put('/api/projects/:id', async (req, res) => {
+  try {
+    const projectId = req.params.id;
+    const { ProjectName, Description, ImageID } = req.body;
+    
+    if (!ProjectName) {
+      return res.status(400).json({ success: false, message: 'Project name is required' });
+    }
+    
+    const updateFields = ['ProjectName = ?'];
+    const updateValues = [ProjectName];
+    
+    if (Description !== undefined) {
+      updateFields.push('Description = ?');
+      updateValues.push(Description);
+    }
+    
+    if (ImageID !== undefined) {
+      updateFields.push('image_id = ?');
+      updateValues.push(ImageID);
+    }
+    
+    updateFields.push('DateModified = ?');
+    updateValues.push(new Date().toISOString().split('T')[0]);
+    
+    updateValues.push(projectId);
+    
+    const result = await executeQuery(
+      `UPDATE project SET ${updateFields.join(', ')} WHERE ProjectID = ?`,
+      updateValues
+    );
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Project not found' });
+    }
+    
+    res.json({ success: true, message: 'Project updated successfully' });
+  } catch (error) {
+    console.error('Error updating project:', error);
+    res.status(500).json({ success: false, message: 'Error updating project', error: error.message });
+  }
+});
+
+// Get single project by ID
+app.get('/api/projects/:id', async (req, res) => {
+  try {
+    const projectId = req.params.id;
+    
+    // Join with media_files table to get image information if linked
+    const query = `
+      SELECT 
+        p.*,
+        m.file_name,
+        m.file_path,
+        m.displayName as media_display_name
+      FROM project p
+      LEFT JOIN media_files m ON p.image_id = m.id
+      WHERE p.ProjectID = ?
+    `;
+    
+    const projects = await executeQuery(query, [projectId]);
+    if (projects.length === 0) {
+      return res.status(404).json({ success: false, message: 'Project not found' });
+    }
+    
+    const project = projects[0];
+    
+    // Map database fields to frontend expectations
+    const responseData = {
+      ProjectID: project.ProjectID,
+      ProjectName: project.ProjectName,
+      Description: project.description !== undefined ? project.description : project.Description, // Handle both lowercase and uppercase
+      user_id: project.user_id,
+      Approved: project.Approved,
+      NeedsReview: project.NeedsReview,
+      DateCreated: project.DateCreated,
+      DateModified: project.DateModified,
+      DateApproved: project.DateApproved,
+      ImageID: project.image_id, // Map image_id to ImageID
+      ImageURL: project.file_path ? `/${project.file_path}` : null, // Construct ImageURL from file_path
+      ImageName: project.media_display_name || project.file_name
+    };
+    
+    res.json({ success: true, data: responseData });
+  } catch (error) {
+    console.error('Error fetching project:', error);
+    res.status(500).json({ success: false, message: 'Error fetching project', error: error.message });
+  }
+});
+
+// Delete project
+app.delete('/api/projects/:id', async (req, res) => {
+  try {
+    const projectId = req.params.id;
+    const { user_id } = req.body;
+    
+    if (!user_id) {
+      return res.status(400).json({ success: false, message: 'User ID is required' });
+    }
+    
+    // First check if the project exists and belongs to the user
+    const projects = await executeQuery('SELECT * FROM project WHERE ProjectID = ? AND user_id = ?', [projectId, user_id]);
+    
+    if (projects.length === 0) {
+      return res.status(404).json({ success: false, message: 'Project not found or access denied' });
+    }
+    
+    // Delete the project
+    const result = await executeQuery('DELETE FROM project WHERE ProjectID = ? AND user_id = ?', [projectId, user_id]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Project not found or could not be deleted' });
+    }
+    
+    res.json({ success: true, message: 'Project deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting project:', error);
+    res.status(500).json({ success: false, message: 'Error deleting project', error: error.message });
   }
 });
 

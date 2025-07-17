@@ -35,3 +35,16 @@ INSERT INTO artworks (title, artist, year, medium, description, price) VALUES
 ('Digital Landscape', 'John Doe', 2024, 'Digital', 'A beautiful digital landscape painting', 500.00),
 ('Abstract Colors', 'Jane Smith', 2024, 'Acrylic', 'Vibrant abstract composition', 750.00),
 ('Modern Portrait', 'John Doe', 2023, 'Oil on Canvas', 'Contemporary portrait style', 1200.00);
+
+-- Create project table for user projects
+CREATE TABLE IF NOT EXISTS project (
+    ProjectID INT AUTO_INCREMENT PRIMARY KEY,
+    ProjectName VARCHAR(255) NOT NULL,
+    Description TEXT,
+    user_id INT NOT NULL,
+    Approved TINYINT DEFAULT 0,
+    NeedsReview TINYINT DEFAULT 1,
+    DateCreated DATE,
+    DateModified DATE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);

@@ -8,7 +8,12 @@
                 <label for="editProjectName">Project Name</label>
                 <input type="text" id="editProjectName" name="editProjectName" required>
             </div>
-            
+
+            <div class="form-group">
+                <label for="editProjectDescription">Description</label>
+                <textarea id="editProjectDescription" name="editProjectDescription" placeholder="Describe the project" rows="4"></textarea>
+            </div>
+
             <div class="form-group">
                 <label for="editProjectImage">Project Image</label>
                 <div class="project-image-container">
@@ -46,6 +51,77 @@
                 <button type="submit" class="btn btn-primary">Save</button>
             </div>
         </form>
+    </div>
+</div>
+
+<!-- View Project Modal -->
+<div id="viewProjectModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeViewProjectModal()">&times;</span>
+        <h2><i class="fas fa-eye"></i> View Project</h2>
+        
+        <div class="view-project-content">
+            <div class="view-project-header">
+                <div class="view-project-title-section">
+                    <h3 id="viewProjectName">Project Name</h3>
+                    <span id="viewProjectStatus" class="project-status status-pending">Pending</span>
+                </div>
+            </div>
+            
+            <div class="view-project-body">
+                <div class="view-project-info">
+                    <div class="info-section">
+                        <h4><i class="fas fa-align-left"></i> Description</h4>
+                        <p id="viewProjectDescription">No description available</p>
+                    </div>
+                    
+                    <div class="info-section">
+                        <h4><i class="fas fa-calendar"></i> Project Dates</h4>
+                        <div class="date-info">
+                            <div class="date-item">
+                                <span class="date-label">Created:</span>
+                                <span id="viewProjectCreated">Unknown</span>
+                            </div>
+                            <div class="date-item">
+                                <span class="date-label">Last Modified:</span>
+                                <span id="viewProjectModified">Unknown</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="view-project-image-section">
+                    <h4><i class="fas fa-image"></i> Project Image</h4>
+                    
+                    <!-- When image exists -->
+                    <div id="viewProjectImageContainer" class="project-image-display" style="display: none;">
+                        <div class="project-image-wrapper">
+                            <img id="viewProjectImage" src="" alt="Project image" class="project-main-image">
+                            <div class="image-info">
+                                <span id="viewProjectImageName">Project Image</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- When no image -->
+                    <div id="viewProjectNoImage" class="no-image-display">
+                        <div class="no-image-placeholder">
+                            <i class="fas fa-image"></i>
+                            <p>No image attached to this project</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="view-project-actions">
+                <button class="btn btn-secondary" onclick="closeViewProjectModal()">
+                    <i class="fas fa-times"></i> Close
+                </button>
+                <button class="btn btn-primary" onclick="closeViewProjectModal(); editProject(window.currentViewingProjectId);">
+                    <i class="fas fa-edit"></i> Edit Project
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -136,7 +212,12 @@
         <!-- User Projects Section -->
         <div class="dashboard-projects">
             <div class="projects-section">
-                <h3><i class="fas fa-folder"></i> Your Projects</h3>
+                <div class="projects-header">
+                    <h3><i class="fas fa-folder"></i> Your Projects</h3>
+                    <button class="btn btn-primary btn-create-project" onclick="showCreateProjectModal()">
+                        <i class="fas fa-plus"></i> New Project
+                    </button>
+                </div>
                 <div class="projects-grid" id="user-projects-grid">
                     <div class="projects-loading">
                         <i class="fas fa-spinner fa-spin"></i> Loading projects...
@@ -150,7 +231,7 @@
                 <h3>Quick Actions</h3>
                 <div class="action-buttons">
                     
-                    <button class="btn btn-secondary" onclick="showCreateProjectModal()">
+                    <button class="btn btn-primary" onclick="showCreateProjectModal()">
                         <i class="fas fa-folder-plus"></i> Create Project
                     </button>
                     <button class="btn btn-info" onclick="viewProfile()">
