@@ -316,7 +316,14 @@ app.delete('/api/art/:id', async (req, res) => {
 // Project API Routes
 app.get('/api/projects', async (req, res) => {
   try {
-    const projects = await executeQuery('SELECT * FROM project ORDER BY ProjectID');
+    // Support filtering by user_id via query param
+    const userId = req.query.user_id;
+    let projects;
+    if (userId) {
+      projects = await executeQuery('SELECT * FROM project WHERE user_id = ? ORDER BY ProjectID', [userId]);
+    } else {
+      projects = await executeQuery('SELECT * FROM project ORDER BY ProjectID');
+    }
     res.json({ success: true, data: projects });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error fetching projects', error: error.message });
@@ -324,19 +331,16 @@ app.get('/api/projects', async (req, res) => {
 });
 
 app.post('/api/projects', async (req, res) => {
-  const { ProjectName, Approved, NeedsReview } = req.body;
-  
-  if (!ProjectName) {
-    return res.status(400).json({ success: false, message: 'ProjectName is required' });
+  const { ProjectName, Approved, NeedsReview, user_id } = req.body;
+  if (!ProjectName || !user_id) {
+    return res.status(400).json({ success: false, message: 'ProjectName and user_id are required' });
   }
-  
   try {
     const today = new Date().toISOString().split('T')[0];
     const result = await executeQuery(
-      'INSERT INTO project (ProjectName, Approved, NeedsReview, DateCreated, DateModified) VALUES (?, ?, ?, ?, ?)',
-      [ProjectName, Approved || 0, NeedsReview || 1, today, today]
+      'INSERT INTO project (ProjectName, user_id, Approved, NeedsReview, DateCreated, DateModified) VALUES (?, ?, ?, ?, ?, ?)',
+      [ProjectName, user_id, Approved || 0, NeedsReview || 1, today, today]
     );
-    
     const newProject = await executeQuery('SELECT * FROM project WHERE ProjectID = ?', [result.insertId]);
     res.status(201).json({ success: true, data: newProject[0] });
   } catch (error) {

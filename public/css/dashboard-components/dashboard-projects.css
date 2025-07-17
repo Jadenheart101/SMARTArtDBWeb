@@ -1,0 +1,219 @@
+/* Dashboard Projects Section */
+.dashboard-projects {
+    margin: 2rem 0;
+}
+
+.projects-section {
+    background: var(--card-bg, #ffffff);
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    border: 1px solid var(--border-color, #e0e0e0);
+}
+
+.projects-section h3 {
+    color: var(--text-primary, #2c3e50);
+    margin-bottom: 1.5rem;
+    font-size: 1.2rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.projects-section h3 i {
+    color: var(--primary-color, #3498db);
+}
+
+.projects-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+    min-height: 200px;
+}
+
+.projects-loading {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary, #718096);
+    font-size: 1rem;
+    padding: 2rem;
+}
+
+.projects-loading i {
+    margin-right: 0.5rem;
+    color: var(--primary-color, #3498db);
+}
+
+.project-card {
+    background: var(--card-bg, #ffffff);
+    border: 1px solid var(--border-color, #e0e0e0);
+    border-radius: 8px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.project-card:hover {
+    border-color: var(--primary-color, #3498db);
+    box-shadow: 0 6px 12px rgba(52, 152, 219, 0.1);
+    transform: translateY(-2px);
+}
+
+.project-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+
+.project-card-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary, #2c3e50);
+    margin: 0;
+    line-height: 1.4;
+}
+
+.project-card-status {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.project-status-approved {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.project-status-pending {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.project-status-review {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+.project-card-dates {
+    margin: 1rem 0;
+    color: var(--text-secondary, #718096);
+    font-size: 0.875rem;
+}
+
+.project-card-date {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.project-card-date i {
+    width: 14px;
+    color: var(--primary-color, #3498db);
+}
+
+.project-card-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.project-card-btn {
+    flex: 1;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.project-card-btn-primary {
+    background: var(--primary-color, #3498db);
+    color: white;
+}
+
+.project-card-btn-primary:hover {
+    background: var(--primary-hover, #2980b9);
+}
+
+.project-card-btn-secondary {
+    background: var(--secondary-color, #95a5a6);
+    color: white;
+}
+
+.project-card-btn-secondary:hover {
+    background: var(--secondary-hover, #7f8c8d);
+}
+
+.projects-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 3rem 2rem;
+    color: var(--text-secondary, #718096);
+}
+
+.projects-empty-icon {
+    font-size: 3rem;
+    color: var(--border-color, #e0e0e0);
+    margin-bottom: 1rem;
+}
+
+.projects-empty h4 {
+    color: var(--text-primary, #2c3e50);
+    margin-bottom: 0.5rem;
+}
+
+.projects-empty p {
+    margin-bottom: 1.5rem;
+    line-height: 1.6;
+}
+
+.projects-empty .btn {
+    background: var(--primary-color, #3498db);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.projects-empty .btn:hover {
+    background: var(--primary-hover, #2980b9);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .projects-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .project-card-actions {
+        flex-direction: column;
+    }
+    
+    .project-card-btn {
+        flex: none;
+    }
+}
