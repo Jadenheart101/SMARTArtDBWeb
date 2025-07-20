@@ -135,3 +135,109 @@
         width: 95%;
     }
 }
+
+/* ========== Art Info Modal Styles ========== */
+#addArtInfoModal .modal-content {
+    max-width: 600px;
+    width: 90%;
+}
+
+.art-info-preview {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    padding: 1rem;
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.art-info-preview img {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 2px solid #e2e8f0;
+}
+
+.art-info-details {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.art-info-details h4 {
+    margin: 0 0 0.5rem 0;
+    color: #1f2937;
+    font-size: 1.125rem;
+}
+
+.art-info-details p {
+    margin: 0;
+    color: #6b7280;
+    font-size: 0.875rem;
+}
+
+#addArtInfoForm .form-group {
+    margin-bottom: 1.5rem;
+}
+
+#addArtInfoForm label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: #374151;
+}
+
+#addArtInfoForm input,
+#addArtInfoForm textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+#addArtInfoForm input:focus,
+#addArtInfoForm textarea:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.art-info-form-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e5e7eb;
+}
+
+/* Status indicator styling */
+#artInfoExistingStatus {
+    font-style: italic;
+    font-size: 0.875rem;
+    color: #6b7280;
+}
+
+/* Responsive design for art info modal */
+@media (max-width: 768px) {
+    .art-info-preview {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .art-info-preview img {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto;
+    }
+    
+    .art-info-form-actions {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+}
