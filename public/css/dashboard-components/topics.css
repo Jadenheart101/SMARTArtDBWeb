@@ -370,6 +370,22 @@
     font-weight: 500;
 }
 
+.card-type-select {
+    padding: 0.375rem;
+    border: 1px solid #d1d5db;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    background: white;
+    cursor: pointer;
+    min-width: 120px;
+}
+
+.card-type-select:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+}
+
 .card-body-input, .card-notes-input, .card-references-input {
     width: 100%;
     padding: 0.375rem;

@@ -1058,7 +1058,7 @@ app.post('/api/pois/:id/cards', async (req, res) => {
     const nextCardId = (maxCard[0]?.maxId || 0) + 1;
     
     const result = await executeQuery(
-      'INSERT INTO card (CardID, Title, Body, Type, POIID_FK, Notes, References) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO card (CardID, Title, Body, Type, POIID_FK, Notes, `References`) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [nextCardId, Title, Body || '', Type || 1, poiId, Notes || '', References || '']
     );
     
@@ -1078,7 +1078,7 @@ app.post('/api/pois/:id/cards', async (req, res) => {
 app.put('/api/cards/:id', async (req, res) => {
   try {
     const cardId = req.params.id;
-    const { Title, Body, Notes, References } = req.body;
+    const { Title, Body, Type, Notes, References } = req.body;
     
     const updateFields = [];
     const updateValues = [];
@@ -1093,13 +1093,18 @@ app.put('/api/cards/:id', async (req, res) => {
       updateValues.push(Body);
     }
     
+    if (Type !== undefined) {
+      updateFields.push('Type = ?');
+      updateValues.push(Type);
+    }
+    
     if (Notes !== undefined) {
       updateFields.push('Notes = ?');
       updateValues.push(Notes);
     }
     
     if (References !== undefined) {
-      updateFields.push('References = ?');
+      updateFields.push('`References` = ?');
       updateValues.push(References);
     }
     
