@@ -122,6 +122,26 @@
     gap: 0.75rem;
     max-height: 300px;
     overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Scrollbar styling for gallery grid in modals */
+.gallery-grid::-webkit-scrollbar {
+    width: 6px;
+}
+
+.gallery-grid::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
+}
+
+.gallery-grid::-webkit-scrollbar-thumb {
+    background: #6366f1;
+    border-radius: 3px;
+}
+
+.gallery-grid::-webkit-scrollbar-thumb:hover {
+    background: #4f46e5;
 }
 
 .gallery-grid img {

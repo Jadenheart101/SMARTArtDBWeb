@@ -150,3 +150,53 @@ body {
 html {
     scroll-behavior: smooth;
 }
+
+/* Global scrollbar styling */
+::-webkit-scrollbar {
+    width: 12px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 6px;
+    border: 2px solid #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+}
+
+/* Firefox scrollbar styling */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #667eea #f1f5f9;
+}
+
+/* Smooth scrolling for all scrollable elements */
+* {
+    scroll-behavior: smooth;
+}
+
+/* Improved scrolling for containers */
+.scrollable-container {
+    max-height: 70vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.scrollable-container-small {
+    max-height: 40vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.scrollable-container-large {
+    max-height: 85vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+}

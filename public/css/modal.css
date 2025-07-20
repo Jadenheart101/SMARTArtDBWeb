@@ -18,9 +18,12 @@
     border-radius: 12px;
     width: 90%;
     max-width: 400px;
+    max-height: 85vh;
     position: relative;
     animation: modalSlideIn 0.3s ease-out;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 @keyframes modalSlideIn {
@@ -133,6 +136,32 @@
         margin: 10% auto;
         padding: 1.5rem;
         width: 95%;
+        max-height: 80vh;
+    }
+    
+    .modal-body {
+        max-height: 50vh;
+    }
+    
+    .dashboard-modal .modal-content {
+        max-height: 85vh;
+    }
+    
+    .media-preview-content {
+        max-height: 90vh;
+    }
+}
+
+@media (max-width: 480px) {
+    .modal-content {
+        margin: 5% auto;
+        padding: 1rem;
+        width: 98%;
+        max-height: 90vh;
+    }
+    
+    .modal-body {
+        max-height: 60vh;
     }
 }
 
@@ -140,6 +169,46 @@
 #addArtInfoModal .modal-content {
     max-width: 600px;
     width: 90%;
+    max-height: 90vh;
+}
+
+/* ========== Dashboard Modal Styles ========== */
+.dashboard-modal .modal-content {
+    max-width: 900px;
+    width: 95%;
+    max-height: 90vh;
+}
+
+.media-preview-content {
+    max-width: 1200px;
+    width: 95%;
+    max-height: 95vh;
+}
+
+/* ========== Scrollable Content Areas ========== */
+.modal-body {
+    max-height: 60vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 0.5rem;
+}
+
+.modal-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
 }
 
 .art-info-preview {

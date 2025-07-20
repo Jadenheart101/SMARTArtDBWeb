@@ -58,6 +58,30 @@
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 1rem;
     min-height: 200px;
+    max-height: 60vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0.5rem;
+    border-radius: 8px;
+}
+
+/* Scrollbar Styling for Media Gallery */
+.media-gallery::-webkit-scrollbar {
+    width: 8px;
+}
+
+.media-gallery::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
+}
+
+.media-gallery::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+.media-gallery::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
 }
 
 .media-loading {
@@ -83,6 +107,8 @@
     
     .media-gallery {
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        max-height: 50vh;
+        padding: 0.5rem;
     }
     
     .media-stats {

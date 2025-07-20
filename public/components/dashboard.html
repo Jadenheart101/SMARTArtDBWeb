@@ -45,6 +45,19 @@
                 </div>
                 <input type="hidden" id="editSelectedImageId" name="selectedImageId">
             </div>
+
+            <!-- Topics Section -->
+            <div class="form-group">
+                <label for="projectTopics">Project Topics</label>
+                <div class="topics-management">
+                    <div class="topics-list" id="editTopicsList">
+                        <!-- Topics will be loaded here -->
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="addEditTopic()">
+                        <i class="fas fa-plus"></i> Add Topic
+                    </button>
+                </div>
+            </div>
             
             <div class="form-actions">
                 <button type="button" class="btn btn-secondary" onclick="closeEditProjectModal()">Cancel</button>
@@ -108,6 +121,26 @@
                         <div class="no-image-placeholder">
                             <i class="fas fa-image"></i>
                             <p>No image attached to this project</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Topics Section -->
+                <div class="view-project-topics-section">
+                    <div class="topics-header">
+                        <h4><i class="fas fa-list"></i> Topics</h4>
+                        <button class="btn btn-sm btn-primary" onclick="addNewTopic()" id="addTopicBtn" style="display: none;">
+                            <i class="fas fa-plus"></i> Add Topic
+                        </button>
+                    </div>
+                    
+                    <div id="projectTopicsContainer" class="topics-container">
+                        <div class="no-topics-display">
+                            <div class="no-topics-placeholder">
+                                <i class="fas fa-list"></i>
+                                <p>No topics added to this project</p>
+                                <small>Edit the project to add topics</small>
+                            </div>
                         </div>
                     </div>
                 </div>

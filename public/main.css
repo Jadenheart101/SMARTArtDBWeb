@@ -14,3 +14,6 @@
 @import url('css/footer.css');
 @import url('css/dashboard.css');
 @import url('css/modal.css');
+
+/* Dashboard component styles */
+@import url('css/dashboard-components/topics.css');

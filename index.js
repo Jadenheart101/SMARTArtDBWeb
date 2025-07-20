@@ -114,6 +114,16 @@ app.get('/api', (req, res) => {
       'POST /api/projects': 'Create new project',
       'PUT /api/projects/:id': 'Update project',
       'DELETE /api/projects/:id': 'Delete project',
+      'GET /api/projects/:id/topics': 'Get project topics with POIs and cards',
+      'POST /api/projects/:id/topics': 'Create project topic',
+      'PUT /api/topics/:id': 'Update project topic',
+      'DELETE /api/topics/:id': 'Delete project topic (cascades to POIs and cards)',
+      'POST /api/topics/:id/pois': 'Create POI for a topic',
+      'PUT /api/pois/:id': 'Update POI coordinates',
+      'DELETE /api/pois/:id': 'Delete POI (cascades to cards)',
+      'POST /api/pois/:id/cards': 'Create card for a POI',
+      'PUT /api/cards/:id': 'Update card content',
+      'DELETE /api/cards/:id': 'Delete card',
       'GET /api/cards': 'Get all cards',
       'POST /api/cards': 'Create new card',
       'POST /api/media/upload': 'Upload media file',
@@ -804,6 +814,333 @@ app.get('/api/users/:userId/media', async (req, res) => {
   } catch (error) {
     console.error('Error getting user media:', error);
     res.status(500).json({ success: false, message: 'Error getting user media', error: error.message });
+  }
+});
+
+// ========== Project Topics API Routes (using existing tables) ==========
+
+// Get project topics with POIs and cards
+app.get('/api/projects/:id/topics', async (req, res) => {
+  try {
+    const projectId = req.params.id;
+    
+    // Get topics for the project
+    const topics = await executeQuery(
+      'SELECT * FROM topic WHERE ProjectID_FK = ? ORDER BY TopicID',
+      [projectId]
+    );
+    
+    // For each topic, get its POIs and cards
+    const topicsWithContent = await Promise.all(topics.map(async (topic) => {
+      // Get POIs for this topic
+      const pois = await executeQuery(
+        'SELECT * FROM poi WHERE TopicID_FK = ? ORDER BY POIID',
+        [topic.TopicID]
+      );
+      
+      // For each POI, get its cards
+      const poisWithCards = await Promise.all(pois.map(async (poi) => {
+        const cards = await executeQuery(
+          'SELECT * FROM card WHERE POIID_FK = ? ORDER BY CardID',
+          [poi.POIID]
+        );
+        return { ...poi, cards };
+      }));
+      
+      return { 
+        ...topic, 
+        pois: poisWithCards,
+        is_expanded: false // Default to collapsed
+      };
+    }));
+    
+    res.json({ success: true, data: topicsWithContent });
+  } catch (error) {
+    console.error('Error fetching project topics:', error);
+    res.status(500).json({ success: false, message: 'Error fetching project topics', error: error.message });
+  }
+});
+
+// Create project topic
+app.post('/api/projects/:id/topics', async (req, res) => {
+  try {
+    const projectId = req.params.id;
+    const { Label } = req.body;
+    
+    if (!Label) {
+      return res.status(400).json({ success: false, message: 'Topic label is required' });
+    }
+    
+    const result = await executeQuery(
+      'INSERT INTO topic (Label, ProjectID_FK) VALUES (?, ?)',
+      [Label, projectId]
+    );
+    
+    const newTopic = await executeQuery(
+      'SELECT * FROM topic WHERE TopicID = ?',
+      [result.insertId]
+    );
+    
+    res.status(201).json({ 
+      success: true, 
+      data: { 
+        ...newTopic[0], 
+        pois: [],
+        is_expanded: false 
+      } 
+    });
+  } catch (error) {
+    console.error('Error creating project topic:', error);
+    res.status(500).json({ success: false, message: 'Error creating project topic', error: error.message });
+  }
+});
+
+// Update project topic
+app.put('/api/topics/:id', async (req, res) => {
+  try {
+    const topicId = req.params.id;
+    const { Label } = req.body;
+    
+    if (!Label) {
+      return res.status(400).json({ success: false, message: 'Topic label is required' });
+    }
+    
+    const result = await executeQuery(
+      'UPDATE topic SET Label = ? WHERE TopicID = ?',
+      [Label, topicId]
+    );
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Topic not found' });
+    }
+    
+    const updatedTopic = await executeQuery('SELECT * FROM topic WHERE TopicID = ?', [topicId]);
+    res.json({ success: true, data: updatedTopic[0] });
+  } catch (error) {
+    console.error('Error updating project topic:', error);
+    res.status(500).json({ success: false, message: 'Error updating project topic', error: error.message });
+  }
+});
+
+// Delete project topic (and cascade to POIs and cards)
+app.delete('/api/topics/:id', async (req, res) => {
+  try {
+    const topicId = req.params.id;
+    
+    // First delete all cards for POIs in this topic
+    await executeQuery(
+      'DELETE c FROM card c INNER JOIN poi p ON c.POIID_FK = p.POIID WHERE p.TopicID_FK = ?',
+      [topicId]
+    );
+    
+    // Then delete all POIs for this topic
+    await executeQuery('DELETE FROM poi WHERE TopicID_FK = ?', [topicId]);
+    
+    // Finally delete the topic
+    const result = await executeQuery('DELETE FROM topic WHERE TopicID = ?', [topicId]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Topic not found' });
+    }
+    
+    res.json({ success: true, message: 'Topic and all related content deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting project topic:', error);
+    res.status(500).json({ success: false, message: 'Error deleting project topic', error: error.message });
+  }
+});
+
+// Create POI for a topic
+app.post('/api/topics/:id/pois', async (req, res) => {
+  try {
+    const topicId = req.params.id;
+    const { XCoord, YCoord } = req.body;
+    
+    const result = await executeQuery(
+      'INSERT INTO poi (TopicID_FK, XCoord, YCoord) VALUES (?, ?, ?)',
+      [topicId, XCoord || 0, YCoord || 0]
+    );
+    
+    const newPOI = await executeQuery(
+      'SELECT * FROM poi WHERE POIID = ?',
+      [result.insertId]
+    );
+    
+    res.status(201).json({ 
+      success: true, 
+      data: { 
+        ...newPOI[0], 
+        cards: [] 
+      } 
+    });
+  } catch (error) {
+    console.error('Error creating POI:', error);
+    res.status(500).json({ success: false, message: 'Error creating POI', error: error.message });
+  }
+});
+
+// Update POI coordinates
+app.put('/api/pois/:id', async (req, res) => {
+  try {
+    const poiId = req.params.id;
+    const { XCoord, YCoord } = req.body;
+    
+    const updateFields = [];
+    const updateValues = [];
+    
+    if (XCoord !== undefined) {
+      updateFields.push('XCoord = ?');
+      updateValues.push(XCoord);
+    }
+    
+    if (YCoord !== undefined) {
+      updateFields.push('YCoord = ?');
+      updateValues.push(YCoord);
+    }
+    
+    if (updateFields.length === 0) {
+      return res.status(400).json({ success: false, message: 'No coordinates to update' });
+    }
+    
+    updateValues.push(poiId);
+    
+    const result = await executeQuery(
+      `UPDATE poi SET ${updateFields.join(', ')} WHERE POIID = ?`,
+      updateValues
+    );
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'POI not found' });
+    }
+    
+    const updatedPOI = await executeQuery('SELECT * FROM poi WHERE POIID = ?', [poiId]);
+    res.json({ success: true, data: updatedPOI[0] });
+  } catch (error) {
+    console.error('Error updating POI:', error);
+    res.status(500).json({ success: false, message: 'Error updating POI', error: error.message });
+  }
+});
+
+// Delete POI (and cascade to cards)
+app.delete('/api/pois/:id', async (req, res) => {
+  try {
+    const poiId = req.params.id;
+    
+    // First delete all cards for this POI
+    await executeQuery('DELETE FROM card WHERE POIID_FK = ?', [poiId]);
+    
+    // Then delete the POI
+    const result = await executeQuery('DELETE FROM poi WHERE POIID = ?', [poiId]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'POI not found' });
+    }
+    
+    res.json({ success: true, message: 'POI and all related cards deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting POI:', error);
+    res.status(500).json({ success: false, message: 'Error deleting POI', error: error.message });
+  }
+});
+
+// Create card for a POI
+app.post('/api/pois/:id/cards', async (req, res) => {
+  try {
+    const poiId = req.params.id;
+    const { Title, Body, Type, Notes, References } = req.body;
+    
+    if (!Title) {
+      return res.status(400).json({ success: false, message: 'Card title is required' });
+    }
+    
+    // Get next CardID
+    const maxCard = await executeQuery('SELECT MAX(CardID) as maxId FROM card');
+    const nextCardId = (maxCard[0]?.maxId || 0) + 1;
+    
+    const result = await executeQuery(
+      'INSERT INTO card (CardID, Title, Body, Type, POIID_FK, Notes, References) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [nextCardId, Title, Body || '', Type || 1, poiId, Notes || '', References || '']
+    );
+    
+    const newCard = await executeQuery(
+      'SELECT * FROM card WHERE CardID = ?',
+      [nextCardId]
+    );
+    
+    res.status(201).json({ success: true, data: newCard[0] });
+  } catch (error) {
+    console.error('Error creating card:', error);
+    res.status(500).json({ success: false, message: 'Error creating card', error: error.message });
+  }
+});
+
+// Update card
+app.put('/api/cards/:id', async (req, res) => {
+  try {
+    const cardId = req.params.id;
+    const { Title, Body, Notes, References } = req.body;
+    
+    const updateFields = [];
+    const updateValues = [];
+    
+    if (Title !== undefined) {
+      updateFields.push('Title = ?');
+      updateValues.push(Title);
+    }
+    
+    if (Body !== undefined) {
+      updateFields.push('Body = ?');
+      updateValues.push(Body);
+    }
+    
+    if (Notes !== undefined) {
+      updateFields.push('Notes = ?');
+      updateValues.push(Notes);
+    }
+    
+    if (References !== undefined) {
+      updateFields.push('References = ?');
+      updateValues.push(References);
+    }
+    
+    if (updateFields.length === 0) {
+      return res.status(400).json({ success: false, message: 'No fields to update' });
+    }
+    
+    updateValues.push(cardId);
+    
+    const result = await executeQuery(
+      `UPDATE card SET ${updateFields.join(', ')} WHERE CardID = ?`,
+      updateValues
+    );
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Card not found' });
+    }
+    
+    const updatedCard = await executeQuery('SELECT * FROM card WHERE CardID = ?', [cardId]);
+    res.json({ success: true, data: updatedCard[0] });
+  } catch (error) {
+    console.error('Error updating card:', error);
+    res.status(500).json({ success: false, message: 'Error updating card', error: error.message });
+  }
+});
+
+// Delete card
+app.delete('/api/cards/:id', async (req, res) => {
+  try {
+    const cardId = req.params.id;
+    
+    const result = await executeQuery('DELETE FROM card WHERE CardID = ?', [cardId]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ success: false, message: 'Card not found' });
+    }
+    
+    res.json({ success: true, message: 'Card deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting card:', error);
+    res.status(500).json({ success: false, message: 'Error deleting card', error: error.message });
   }
 });
 

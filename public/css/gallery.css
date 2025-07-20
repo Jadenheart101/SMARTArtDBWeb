@@ -12,6 +12,30 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     gap: 2rem;
+    max-height: 80vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 1rem;
+    border-radius: 8px;
+}
+
+/* Scrollbar Styling for Gallery Grid */
+.gallery-grid::-webkit-scrollbar {
+    width: 10px;
+}
+
+.gallery-grid::-webkit-scrollbar-track {
+    background: #e2e8f0;
+    border-radius: 5px;
+}
+
+.gallery-grid::-webkit-scrollbar-thumb {
+    background: #6366f1;
+    border-radius: 5px;
+}
+
+.gallery-grid::-webkit-scrollbar-thumb:hover {
+    background: #4f46e5;
 }
 
 .gallery-item {

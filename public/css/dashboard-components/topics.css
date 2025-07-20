@@ -1,0 +1,463 @@
+/* ========== Project Topics Styles (using existing database structure) ========== */
+
+/* View Project Topics */
+.view-project-topics-section {
+    margin-top: 2rem;
+}
+
+.topics-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.topics-header h4 {
+    margin: 0;
+    color: #1f2937;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.topics-container {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.no-topics-display {
+    padding: 2rem;
+    text-align: center;
+    background: #f8fafc;
+}
+
+.no-topics-placeholder {
+    color: #6b7280;
+}
+
+.no-topics-placeholder i {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    color: #9ca3af;
+}
+
+.no-topics-placeholder p {
+    margin: 0.5rem 0;
+    font-weight: 500;
+}
+
+.no-topics-placeholder small {
+    font-size: 0.875rem;
+    color: #9ca3af;
+}
+
+/* Topic Items */
+.topic-item {
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.topic-item:last-child {
+    border-bottom: none;
+}
+
+.topic-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    cursor: pointer;
+    background: #fff;
+    transition: background-color 0.2s;
+}
+
+.topic-header:hover {
+    background: #f8fafc;
+}
+
+.topic-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 500;
+    color: #1f2937;
+}
+
+.topic-toggle {
+    transition: transform 0.2s;
+    color: #6b7280;
+}
+
+.topic-actions {
+    font-size: 0.875rem;
+    color: #6b7280;
+}
+
+.topic-content {
+    border-top: 1px solid #e5e7eb;
+    background: #f8fafc;
+    transition: max-height 0.3s ease, padding 0.3s ease;
+    overflow: hidden;
+}
+
+.topic-content.collapsed {
+    max-height: 0;
+    padding: 0 1rem;
+}
+
+.topic-content.expanded {
+    max-height: 600px;
+    padding: 1rem;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Scrollbar styling for topic content */
+.topic-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.topic-content::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
+}
+
+.topic-content::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+.topic-content::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* POI Items */
+.topic-content-pois {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.poi-item {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 1rem;
+}
+
+.poi-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.poi-header h5 {
+    margin: 0;
+    color: #374151;
+    font-size: 0.95rem;
+}
+
+.poi-header small {
+    color: #6b7280;
+    font-size: 0.8rem;
+}
+
+.poi-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+/* Card Items */
+.card-item {
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    padding: 0.75rem;
+}
+
+.card-header h6 {
+    margin: 0 0 0.5rem 0;
+    color: #1f2937;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.card-body {
+    color: #374151;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    margin-bottom: 0.5rem;
+}
+
+.card-notes, .card-references {
+    font-size: 0.8rem;
+    color: #6b7280;
+    margin-top: 0.25rem;
+    padding-top: 0.25rem;
+    border-top: 1px solid #e5e7eb;
+}
+
+.no-pois-message, .no-cards-message {
+    color: #9ca3af;
+    font-style: italic;
+    font-size: 0.875rem;
+    text-align: center;
+    padding: 1rem;
+}
+
+/* Edit Project Topics */
+.topics-management {
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.topics-list {
+    max-height: 500px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Scrollbar styling for topics list */
+.topics-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.topics-list::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
+}
+
+.topics-list::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+.topics-list::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+.no-topics-message {
+    padding: 2rem;
+    text-align: center;
+    background: #f8fafc;
+    color: #6b7280;
+}
+
+.edit-topic-item {
+    border-bottom: 1px solid #e5e7eb;
+    padding: 1rem;
+    background: #fff;
+}
+
+.edit-topic-item:last-child {
+    border-bottom: none;
+}
+
+.edit-topic-item .topic-header {
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+    padding: 0;
+    cursor: default;
+    background: transparent;
+}
+
+.topic-title-input {
+    flex: 1;
+    padding: 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-weight: 500;
+    font-size: 0.875rem;
+}
+
+.topic-title-input:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* POI Edit Items */
+.topic-pois-edit {
+    margin-top: 1rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    background: #f8fafc;
+}
+
+.no-pois-edit {
+    padding: 1rem;
+    text-align: center;
+    color: #9ca3af;
+    font-style: italic;
+}
+
+.edit-poi-item {
+    border-bottom: 1px solid #e5e7eb;
+    padding: 0.75rem;
+    background: #fff;
+}
+
+.edit-poi-item:last-child {
+    border-bottom: none;
+}
+
+.poi-header-edit {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.poi-coords {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.poi-coords input {
+    padding: 0.25rem;
+    border: 1px solid #d1d5db;
+    border-radius: 3px;
+    text-align: center;
+    font-size: 0.8rem;
+}
+
+/* Card Edit Items */
+.poi-cards-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.no-cards-edit {
+    padding: 0.75rem;
+    text-align: center;
+    color: #9ca3af;
+    font-style: italic;
+    font-size: 0.8rem;
+}
+
+.edit-card-item {
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.card-edit-header {
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-start;
+}
+
+.card-title-input {
+    flex: 1;
+    padding: 0.375rem;
+    border: 1px solid #d1d5db;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.card-body-input, .card-notes-input, .card-references-input {
+    width: 100%;
+    padding: 0.375rem;
+    border: 1px solid #d1d5db;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    font-family: inherit;
+}
+
+.card-body-input {
+    min-height: 60px;
+    resize: vertical;
+}
+
+.card-notes-input, .card-references-input {
+    font-size: 0.75rem;
+    color: #6b7280;
+}
+
+.card-title-input:focus, .card-body-input:focus, 
+.card-notes-input:focus, .card-references-input:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+}
+
+/* Button Styles */
+.btn-xs {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    border-radius: 3px;
+}
+
+.topics-management > button {
+    width: 100%;
+    border: none;
+    border-top: 1px solid #e5e7eb;
+    padding: 0.75rem;
+    background: #f8fafc;
+    color: #374151;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.topics-management > button:hover {
+    background: #e5e7eb;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .topics-header {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: stretch;
+    }
+    
+    .topic-header {
+        padding: 0.75rem;
+    }
+    
+    .topic-content.expanded {
+        padding: 0.75rem;
+        max-height: 400px;
+    }
+    
+    .topics-list {
+        max-height: 350px;
+    }
+    
+    .edit-topic-item {
+        padding: 0.75rem;
+    }
+    
+    .edit-topic-item .topic-header {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .topic-title-input {
+        width: 100%;
+    }
+    
+    .poi-header-edit {
+        flex-wrap: wrap;
+        gap: 0.25rem;
+    }
+    
+    .poi-coords {
+        flex-direction: column;
+    }
+}
