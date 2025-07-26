@@ -9,7 +9,8 @@ body {
     font-family: 'Inter', sans-serif;
     line-height: 1.6;
     color: #333;
-    background-color: #f8fafc;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
 }
 
 .container {
@@ -33,25 +34,26 @@ body {
 }
 
 .btn-primary {
-    background: #fff;
-    color: #6366f1;
+    background: rgba(255,255,255,0.2);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.3);
+    backdrop-filter: blur(10px);
 }
 
 .btn-primary:hover {
-    background: #f1f5f9;
+    background: rgba(255,255,255,0.3);
     transform: translateY(-2px);
 }
 
 .btn-secondary {
     background: transparent;
-    color: #6366f1;
-    border: 2px solid #fff;
+    color: white;
+    border: 2px solid rgba(255,255,255,0.5);
 }
 
 .btn-secondary:hover {
-    background: #f1f5f9;
+    background: rgba(255,255,255,0.1);
     transform: translateY(-2px);
-
 }
 
 .btn-auth {

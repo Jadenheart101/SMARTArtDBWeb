@@ -575,16 +575,49 @@ app.delete('/api/projects/:id', async (req, res) => {
     if (!user_id) {
       return res.status(400).json({ success: false, message: 'User ID is required' });
     }
+
+    // Check if user is admin
+    const user = await executeQuery('SELECT isAdmin FROM user WHERE UserID = ?', [user_id]);
     
-    // First check if the project exists and belongs to the user
-    const projects = await executeQuery('SELECT * FROM project WHERE ProjectID = ? AND user_id = ?', [projectId, user_id]);
+    if (user.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    const isAdmin = user[0].isAdmin;
+
+    // If user is admin, allow deletion of any project
+    // If user is not admin, only allow deletion of their own projects
+    let projectQuery, projectParams;
+    
+    if (isAdmin) {
+      // Admin can delete any project
+      projectQuery = 'SELECT * FROM project WHERE ProjectID = ?';
+      projectParams = [projectId];
+    } else {
+      // Regular user can only delete their own projects
+      projectQuery = 'SELECT * FROM project WHERE ProjectID = ? AND user_id = ?';
+      projectParams = [projectId, user_id];
+    }
+    
+    // First check if the project exists (and belongs to user if not admin)
+    const projects = await executeQuery(projectQuery, projectParams);
     
     if (projects.length === 0) {
       return res.status(404).json({ success: false, message: 'Project not found or access denied' });
     }
+
+    // Delete the project (admin can delete any project, user only their own)
+    let deleteQuery, deleteParams;
     
-    // Delete the project
-    const result = await executeQuery('DELETE FROM project WHERE ProjectID = ? AND user_id = ?', [projectId, user_id]);
+    if (isAdmin) {
+      deleteQuery = 'DELETE FROM project WHERE ProjectID = ?';
+      deleteParams = [projectId];
+    } else {
+      deleteQuery = 'DELETE FROM project WHERE ProjectID = ? AND user_id = ?';
+      deleteParams = [projectId, user_id];
+    }
+    
+    const result = await executeQuery(deleteQuery, deleteParams);
     
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: 'Project not found or could not be deleted' });

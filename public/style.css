@@ -108,12 +108,12 @@ body {
 
 /* Hero Section */
 .hero {
-    background: #000000;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #00ff00;
+    color: white;
     padding-top: 60px;
 }
 
@@ -129,8 +129,8 @@ body {
     font-weight: 700;
     margin-bottom: 1rem;
     line-height: 1.2;
-    color: #00ff00;
-    text-shadow: 0 0 20px #00ff00, 0 0 40px #00ff00, 0 0 60px #00ff00;
+    color: white;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
 
 .hero-subtitle {
@@ -159,24 +159,27 @@ body {
 }
 
 .btn-primary {
-    background: #fff;
-    color: #6366f1;
+    background: rgba(255,255,255,0.2);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.3);
+    backdrop-filter: blur(10px);
 }
 
 .btn-primary:hover {
-    background: #f1f5f9;
+    background: rgba(255,255,255,0.3);
     transform: translateY(-2px);
 }
 
 .btn-secondary {
     background: transparent;
-    color: #fff;
-    border: 2px solid #fff;
+    color: white;
+    border: 2px solid rgba(255,255,255,0.5);
 }
 
 .btn-secondary:hover {
-    background: #fff;
-    color: #6366f1;
+    background: rgba(255,255,255,0.1);
+    color: white;
+    transform: translateY(-2px);
 }
 
 .btn-auth {
