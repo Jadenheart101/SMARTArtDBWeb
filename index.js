@@ -146,7 +146,7 @@ app.get('/api', (req, res) => {
       'POST /api/art': 'Create new artwork',
       'PUT /api/art/:id': 'Update artwork',
       'DELETE /api/art/:id': 'Delete artwork',
-      'GET /api/projects': 'Get all projects',
+      'GET /api/projects': 'Get all projects (filtered by user access if user_id provided, admins see all if is_admin=true)',
       'GET /api/projects/:id': 'Get project by ID',
       'POST /api/projects': 'Create new project',
       'PUT /api/projects/:id': 'Update project',
@@ -374,31 +374,54 @@ app.get('/api/projects', async (req, res) => {
   try {
     // Support filtering by user_id via query param
     const userId = req.query.user_id;
+    const isAdmin = req.query.is_admin === 'true' || req.query.is_admin === '1';
     let query, params;
     
-    // Join with media_files table to get image information
-    if (userId) {
+    // Join with media_files table to get image information and user table for creator info
+    if (userId && !isAdmin) {
+      // Regular user - only show their projects
       query = `
         SELECT 
           p.*,
           m.file_name,
           m.file_path,
-          m.displayName as media_display_name
+          m.displayName as media_display_name,
+          u.UserName as creator_name
         FROM project p
         LEFT JOIN media_files m ON p.image_id = m.id
+        LEFT JOIN user u ON p.user_id = u.UserID
         WHERE p.user_id = ?
         ORDER BY p.ProjectID
       `;
       params = [userId];
-    } else {
+    } else if (isAdmin) {
+      // Admin user - show all projects with creator information
       query = `
         SELECT 
           p.*,
           m.file_name,
           m.file_path,
-          m.displayName as media_display_name
+          m.displayName as media_display_name,
+          u.UserName as creator_name,
+          u.UserID as creator_id
         FROM project p
         LEFT JOIN media_files m ON p.image_id = m.id
+        LEFT JOIN user u ON p.user_id = u.UserID
+        ORDER BY p.ProjectID
+      `;
+      params = [];
+    } else {
+      // No user specified - show all projects (for backwards compatibility)
+      query = `
+        SELECT 
+          p.*,
+          m.file_name,
+          m.file_path,
+          m.displayName as media_display_name,
+          u.UserName as creator_name
+        FROM project p
+        LEFT JOIN media_files m ON p.image_id = m.id
+        LEFT JOIN user u ON p.user_id = u.UserID
         ORDER BY p.ProjectID
       `;
       params = [];
@@ -412,6 +435,8 @@ app.get('/api/projects', async (req, res) => {
       ProjectName: project.ProjectName,
       Description: project.description !== undefined ? project.description : project.Description, // Handle both lowercase and uppercase
       user_id: project.user_id,
+      creator_name: project.creator_name, // Include creator name for admin view
+      creator_id: project.creator_id, // Include creator ID for admin view
       Approved: project.Approved,
       NeedsReview: project.NeedsReview,
       DateCreated: project.DateCreated,

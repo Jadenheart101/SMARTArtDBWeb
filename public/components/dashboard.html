@@ -242,24 +242,52 @@
             </div>
         </div>
 
-        <!-- User Projects Section -->
-        <div class="dashboard-projects">
-            <div class="projects-section">
-                <div class="projects-header">
-                    <h3><i class="fas fa-folder"></i> Your Projects</h3>
-                    <button class="btn btn-primary btn-create-project" onclick="showCreateProjectModal()">
-                        <i class="fas fa-plus"></i> New Project
-                    </button>
-                </div>
-                <div class="projects-grid" id="user-projects-grid">
-                    <div class="projects-loading">
-                        <i class="fas fa-spinner fa-spin"></i> Loading projects...
-                    </div>
-                </div>
-            </div>
-        </div>
+          <!-- User Projects Section -->
+          <div class="dashboard-projects">
+              <div class="projects-section">
+                  <div class="projects-header">
+                      <h3><i class="fas fa-folder"></i> Your Projects</h3>
+                      <button class="btn btn-primary btn-create-project" onclick="showCreateProjectModal()">
+                          <i class="fas fa-plus"></i> New Project
+                      </button>
+                  </div>
+                  <div class="projects-grid" id="user-projects-grid">
+                      <div class="projects-loading">
+                          <i class="fas fa-spinner fa-spin"></i> Loading projects...
+                      </div>
+                  </div>
+              </div>
+          </div>
 
-        <!-- <div class="dashboard-recent">
+          <!-- Admin Projects Section - Only visible to administrators -->
+          <div class="dashboard-admin-projects" id="admin-projects-section" style="display: none;">
+              <div class="projects-section">
+                  <div class="projects-header admin-header">
+                      <h3><i class="fas fa-crown"></i> All Projects (Admin View)</h3>
+                      <div class="admin-actions">
+                          <button class="btn btn-secondary" onclick="refreshAllProjects()">
+                              <i class="fas fa-sync-alt"></i> Refresh
+                          </button>
+                          <span class="admin-badge">Administrator</span>
+                      </div>
+                  </div>
+                  <div class="admin-projects-stats">
+                      <div class="admin-stat">
+                          <i class="fas fa-project-diagram"></i>
+                          <span>Total Projects: <strong id="admin-total-projects">0</strong></span>
+                      </div>
+                      <div class="admin-stat">
+                          <i class="fas fa-users"></i>
+                          <span>Active Creators: <strong id="admin-active-creators">0</strong></span>
+                      </div>
+                  </div>
+                  <div class="projects-grid admin-projects-grid" id="admin-projects-grid">
+                      <div class="projects-loading">
+                          <i class="fas fa-spinner fa-spin"></i> Loading all projects...
+                      </div>
+                  </div>
+              </div>
+          </div>        <!-- <div class="dashboard-recent">
             <div class="recent-section">
                 <h3>Recent Activity</h3>
                 <div class="recent-items" id="recent-activity">
