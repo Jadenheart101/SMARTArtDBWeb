@@ -5,6 +5,43 @@ const fs = require('fs');
 const { testConnection, executeQuery } = require('./database');
 require('dotenv').config();
 
+// Helper function to get the lowest available positive integer ID
+async function getNextAvailableId(tableName, idColumn) {
+  try {
+    // Get all existing IDs, ordered
+    const existingIds = await executeQuery(
+      `SELECT ${idColumn} FROM ${tableName} WHERE ${idColumn} > 0 ORDER BY ${idColumn}`
+    );
+    
+    console.log(`DEBUG: Existing IDs for ${tableName}.${idColumn}:`, existingIds.map(row => row[idColumn]));
+    
+    // If no records exist, start with 1
+    if (existingIds.length === 0) {
+      console.log(`DEBUG: No records found, returning 1`);
+      return 1;
+    }
+    
+    // Check for gaps in the sequence
+    let expectedId = 1;
+    for (const row of existingIds) {
+      const currentId = row[idColumn];
+      if (currentId !== expectedId) {
+        // Found a gap, return the missing ID
+        console.log(`DEBUG: Found gap at ${expectedId}, current ID is ${currentId}`);
+        return expectedId;
+      }
+      expectedId++;
+    }
+    
+    // No gaps found, return the next sequential number
+    console.log(`DEBUG: No gaps found, returning ${expectedId}`);
+    return expectedId;
+  } catch (error) {
+    console.error('Error getting next available ID:', error);
+    throw error;
+  }
+}
+
 const app = express();
 const PORT = process.env.PORT || 8080;
 
@@ -165,12 +202,15 @@ app.post('/api/users', async (req, res) => {
   }
   
   try {
+    // Get next available UserID
+    const nextUserId = await getNextAvailableId('user', 'UserID');
+    
     const result = await executeQuery(
-      'INSERT INTO user (UserName, Password, isAdmin) VALUES (?, ?, ?)',
-      [UserName, Password, isAdmin || 0]
+      'INSERT INTO user (UserID, UserName, Password, isAdmin) VALUES (?, ?, ?, ?)',
+      [nextUserId, UserName, Password, isAdmin || 0]
     );
     
-    const newUser = await executeQuery('SELECT UserID, UserName, isAdmin FROM user WHERE UserID = ?', [result.insertId]);
+    const newUser = await executeQuery('SELECT UserID, UserName, isAdmin FROM user WHERE UserID = ?', [nextUserId]);
     res.status(201).json({ success: true, data: newUser[0] });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error creating user', error: error.message });
@@ -280,12 +320,15 @@ app.post('/api/art', async (req, res) => {
   }
   
   try {
+    // Get next available ArtId
+    const nextArtId = await getNextAvailableId('art', 'ArtId');
+    
     const result = await executeQuery(
-      'INSERT INTO art (ArtistName, Submitor, Date, ArtMedia, ArtName, artcol) VALUES (?, ?, ?, ?, ?, ?)',
-      [ArtistName, Submitor, Date || new Date().toISOString().split('T')[0], ArtMedia, ArtName, artcol]
+      'INSERT INTO art (ArtId, ArtistName, Submitor, Date, ArtMedia, ArtName, artcol) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [nextArtId, ArtistName, Submitor, Date || new Date().toISOString().split('T')[0], ArtMedia, ArtName, artcol]
     );
     
-    const newArtwork = await executeQuery('SELECT * FROM art WHERE ArtId = ?', [result.insertId]);
+    const newArtwork = await executeQuery('SELECT * FROM art WHERE ArtId = ?', [nextArtId]);
     res.status(201).json({ success: true, data: newArtwork[0] });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error creating artwork', error: error.message });
@@ -391,12 +434,15 @@ app.post('/api/projects', async (req, res) => {
     return res.status(400).json({ success: false, message: 'ProjectName and user_id are required' });
   }
   try {
+    // Get next available ProjectID
+    const nextProjectId = await getNextAvailableId('project', 'ProjectID');
+    
     const today = new Date().toISOString().split('T')[0];
     const result = await executeQuery(
-      'INSERT INTO project (ProjectName, user_id, Approved, NeedsReview, DateCreated, DateModified) VALUES (?, ?, ?, ?, ?, ?)',
-      [ProjectName, user_id, Approved || 0, NeedsReview || 1, today, today]
+      'INSERT INTO project (ProjectID, ProjectName, user_id, Approved, NeedsReview, DateCreated, DateModified) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [nextProjectId, ProjectName, user_id, Approved || 0, NeedsReview || 1, today, today]
     );
-    const newProject = await executeQuery('SELECT * FROM project WHERE ProjectID = ?', [result.insertId]);
+    const newProject = await executeQuery('SELECT * FROM project WHERE ProjectID = ?', [nextProjectId]);
     res.status(201).json({ success: true, data: newProject[0] });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error creating project', error: error.message });
@@ -544,12 +590,15 @@ app.post('/api/cards', async (req, res) => {
   }
   
   try {
+    // Get next available CardID
+    const nextCardId = await getNextAvailableId('card', 'CardID');
+    
     const result = await executeQuery(
-      'INSERT INTO card (Title, Body, Type, POIID_FK, Notes, References) VALUES (?, ?, ?, ?, ?, ?)',
-      [Title, Body, Type, POIID_FK, Notes, References]
+      'INSERT INTO card (CardID, Title, Body, Type, POIID_FK, Notes, `References`) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [nextCardId, Title, Body, Type, POIID_FK, Notes, References]
     );
     
-    const newCard = await executeQuery('SELECT * FROM card WHERE CardID = ?', [result.insertId]);
+    const newCard = await executeQuery('SELECT * FROM card WHERE CardID = ?', [nextCardId]);
     res.status(201).json({ success: true, data: newCard[0] });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error creating card', error: error.message });
@@ -580,17 +629,20 @@ app.post('/api/media/upload', upload.single('file'), async (req, res) => {
       // Generate a unique file_id for this upload
       const uniqueFileId = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
+      // Get next available media file ID
+      const nextMediaId = await getNextAvailableId('media_files', 'id');
+      
       // Store file info in database
       const result = await executeQuery(
-        'INSERT INTO media_files (user_id, file_name, original_name, displayName, file_id, file_path, file_url, mime_type, file_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [userId, filename, originalname, customName || null, uniqueFileId, filePath, fileUrl, mimetype, size]
+        'INSERT INTO media_files (id, user_id, file_name, original_name, displayName, file_id, file_path, file_url, mime_type, file_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [nextMediaId, userId, filename, originalname, customName || null, uniqueFileId, filePath, fileUrl, mimetype, size]
       );
       
       res.json({
         success: true,
         message: 'File uploaded successfully',
         file: {
-          id: result.insertId,
+          id: nextMediaId,
           name: filename,
           originalName: originalname,
           url: fileUrl,
@@ -870,15 +922,17 @@ app.post('/api/projects/:id/topics', async (req, res) => {
     if (!Label) {
       return res.status(400).json({ success: false, message: 'Topic label is required' });
     }
+    // Get next available TopicID
+    const nextTopicId = await getNextAvailableId('topic', 'TopicID');
     
     const result = await executeQuery(
-      'INSERT INTO topic (Label, ProjectID_FK) VALUES (?, ?)',
-      [Label, projectId]
+      'INSERT INTO topic (TopicID, Label, ProjectID_FK) VALUES (?, ?, ?)',
+      [nextTopicId, Label, projectId]
     );
     
     const newTopic = await executeQuery(
       'SELECT * FROM topic WHERE TopicID = ?',
-      [result.insertId]
+      [nextTopicId]
     );
     
     res.status(201).json({ 
@@ -956,14 +1010,17 @@ app.post('/api/topics/:id/pois', async (req, res) => {
     const topicId = req.params.id;
     const { XCoord, YCoord } = req.body;
     
+    // Get next available POIID
+    const nextPOIId = await getNextAvailableId('poi', 'POIID');
+    
     const result = await executeQuery(
-      'INSERT INTO poi (TopicID_FK, XCoord, YCoord) VALUES (?, ?, ?)',
-      [topicId, XCoord || 0, YCoord || 0]
+      'INSERT INTO poi (POIID, TopicID_FK, XCoord, YCoord) VALUES (?, ?, ?, ?)',
+      [nextPOIId, topicId, XCoord || 0, YCoord || 0]
     );
     
     const newPOI = await executeQuery(
       'SELECT * FROM poi WHERE POIID = ?',
-      [result.insertId]
+      [nextPOIId]
     );
     
     res.status(201).json({ 
@@ -1053,9 +1110,8 @@ app.post('/api/pois/:id/cards', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Card title is required' });
     }
     
-    // Get next CardID
-    const maxCard = await executeQuery('SELECT MAX(CardID) as maxId FROM card');
-    const nextCardId = (maxCard[0]?.maxId || 0) + 1;
+    // Get next available CardID
+    const nextCardId = await getNextAvailableId('card', 'CardID');
     
     const result = await executeQuery(
       'INSERT INTO card (CardID, Title, Body, Type, POIID_FK, Notes, `References`) VALUES (?, ?, ?, ?, ?, ?, ?)',
