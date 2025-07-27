@@ -11,6 +11,7 @@
     backdrop-filter: blur(5px);
 }
 
+/* Modal content debugging and fixes */
 .modal-content {
     background-color: #fff;
     margin: 5% auto;
@@ -24,6 +25,20 @@
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
     overflow-y: auto;
     overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Ensure form takes full height and allows scrolling */
+#editProjectModal form {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
+#editProjectModal .form-group {
+    flex-shrink: 0;
 }
 
 @keyframes modalSlideIn {
@@ -177,6 +192,64 @@
     max-width: 900px;
     width: 95%;
     max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.dashboard-modal .modal-body {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 1rem;
+}
+
+.dashboard-modal .form-actions {
+    flex-shrink: 0;
+    margin-top: auto;
+    position: sticky;
+    bottom: 0;
+    background: white;
+    padding-top: 1rem;
+    border-top: 1px solid #e5e7eb;
+}
+
+/* Edit Project Modal specific styling */
+#editProjectModal .modal-content {
+    max-width: 900px;
+    width: 95%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+#editProjectModal .form-actions {
+    flex-shrink: 0;
+    margin-top: auto;
+    position: sticky;
+    bottom: 0;
+    background: white;
+    padding-top: 1rem;
+    border-top: 1px solid #e5e7eb;
+    z-index: 10;
+}
+
+/* Force visibility of form actions */
+#editProjectModal .form-actions,
+.form-actions {
+    display: flex !important;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e5e7eb;
+    background: white;
+    visibility: visible !important;
+}
+
+#editProjectModal .form-actions .btn,
+.form-actions .btn {
+    display: inline-block !important;
+    visibility: visible !important;
+    min-width: 80px;
 }
 
 .media-preview-content {
@@ -283,6 +356,56 @@
     margin-top: 2rem;
     padding-top: 1rem;
     border-top: 1px solid #e5e7eb;
+}
+
+/* General form actions styling for all modals */
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: flex-end;
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e5e7eb;
+}
+
+.form-actions .btn {
+    min-width: 80px;
+}
+
+/* Enhanced button styling for better visibility */
+.form-actions .btn-primary {
+    background: linear-gradient(135deg, #4f46e5, #7c3aed) !important;
+    border: none !important;
+    color: white !important;
+    font-weight: 600 !important;
+    padding: 0.75rem 1.5rem !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3) !important;
+    transition: all 0.3s ease !important;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.form-actions .btn-primary:hover {
+    background: linear-gradient(135deg, #3730a3, #6b21a8) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 16px rgba(79, 70, 229, 0.4) !important;
+}
+
+.form-actions .btn-secondary {
+    background: #6b7280 !important;
+    border: 1px solid #9ca3af !important;
+    color: white !important;
+    font-weight: 500 !important;
+    padding: 0.75rem 1.5rem !important;
+    border-radius: 8px !important;
+    transition: all 0.3s ease !important;
+}
+
+.form-actions .btn-secondary:hover {
+    background: #4b5563 !important;
+    border-color: #6b7280 !important;
+    transform: translateY(-1px) !important;
 }
 
 /* Status indicator styling */

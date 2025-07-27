@@ -1098,7 +1098,7 @@ app.post('/api/topics/:id/pois', async (req, res) => {
 app.put('/api/pois/:id', async (req, res) => {
   try {
     const poiId = req.params.id;
-    const { XCoord, YCoord } = req.body;
+    const { XCoord, YCoord, pImage } = req.body;
     
     const updateFields = [];
     const updateValues = [];
@@ -1113,8 +1113,13 @@ app.put('/api/pois/:id', async (req, res) => {
       updateValues.push(YCoord);
     }
     
+    if (pImage !== undefined) {
+      updateFields.push('pImage = ?');
+      updateValues.push(pImage);
+    }
+    
     if (updateFields.length === 0) {
-      return res.status(400).json({ success: false, message: 'No coordinates to update' });
+      return res.status(400).json({ success: false, message: 'No fields to update' });
     }
     
     updateValues.push(poiId);

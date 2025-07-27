@@ -260,16 +260,18 @@
 
 .edit-topic-item .topic-header {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.75rem;
     align-items: flex-start;
     margin-bottom: 1rem;
     padding: 0;
     cursor: default;
     background: transparent;
+    flex-wrap: wrap;
 }
 
 .topic-title-input {
-    flex: 1;
+    flex: 2;
+    min-width: 300px;
     padding: 0.5rem;
     border: 1px solid #d1d5db;
     border-radius: 4px;
@@ -281,6 +283,22 @@
     outline: none;
     border-color: #6366f1;
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* Add POI Button Styling */
+.edit-topic-item .topic-header .btn-secondary {
+    background: #10b981;
+    border-color: #10b981;
+    color: white;
+    font-weight: 500;
+    white-space: nowrap;
+    min-width: 90px;
+}
+
+.edit-topic-item .topic-header .btn-secondary:hover {
+    background: #059669;
+    border-color: #059669;
+    transform: translateY(-1px);
 }
 
 /* POI Edit Items */
@@ -328,6 +346,46 @@
     border-radius: 3px;
     text-align: center;
     font-size: 0.8rem;
+}
+
+/* POI Image Sections */
+.poi-image-section {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.poi-image-preview {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.poi-image-preview img {
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+}
+
+.poi-image-actions {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.poi-no-image {
+    display: flex;
+    align-items: center;
+}
+
+.poi-image-display {
+    margin-top: 0.5rem;
+}
+
+.poi-image-display img {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.poi-no-image {
+    margin-top: 0.25rem;
 }
 
 /* Card Edit Items */
