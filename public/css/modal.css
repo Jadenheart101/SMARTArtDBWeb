@@ -352,10 +352,15 @@
 .art-info-form-actions {
     display: flex;
     gap: 1rem;
-    justify-content: flex-end;
-    margin-top: 2rem;
+    justify-content: center;
+    align-items: center;
+    margin-top: auto;
     padding-top: 1rem;
     border-top: 1px solid #e5e7eb;
+    position: sticky;
+    bottom: 0;
+    background: white;
+    z-index: 10;
 }
 
 /* General form actions styling for all modals */
