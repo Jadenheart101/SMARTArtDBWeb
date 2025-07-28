@@ -1939,6 +1939,8 @@ async function refreshMediaGallery() {
 
 // Display media files in gallery
 function displayMediaFiles(files) {
+    console.log('displayMediaFiles called with:', files);
+    
     const gallery = document.getElementById('media-gallery');
     
     if (!files || files.length === 0) {
@@ -1947,6 +1949,8 @@ function displayMediaFiles(files) {
     }
 
     gallery.innerHTML = files.map(file => {
+        console.log('Processing file:', file);
+        
         const isImage = file.mimeType && file.mimeType.startsWith('image/');
         const isVideo = file.mimeType && file.mimeType.startsWith('video/');
         const isAudio = file.mimeType && file.mimeType.startsWith('audio/');
@@ -1978,8 +1982,17 @@ function displayMediaFiles(files) {
         const updatedDate = file.updatedAt ? new Date(file.updatedAt).toLocaleDateString() : 'Unknown';
         const fileType = file.fileType || (file.mimeType ? file.mimeType.split('/')[0] : 'unknown');
 
+        console.log('File details for onClick:', { 
+            id: file.id, 
+            fileName, 
+            url: file.url, 
+            mimeType: file.mimeType,
+            fileSize,
+            createdDate
+        });
+
         return `
-            <div class="media-item" onclick="previewMedia('${file.id}', '${file.mimeType}', '${file.url}', '${fileName}', '${fileSize}', '${createdDate}')">
+            <div class="media-item" onclick="console.log('Media item clicked!'); previewMedia('${file.id}', '${file.mimeType}', '${file.url}', '${fileName.replace(/'/g, "\\'")}', '${fileSize}', '${createdDate}')">
                 <div class="media-thumbnail">
                     ${thumbnail}
                     <div class="media-type-badge">${typeBadge}</div>
@@ -2130,6 +2143,8 @@ function formatFileSize(bytes) {
 
 // Preview media file
 function previewMedia(fileId, mimeType, fileUrl, fileName, fileSize, uploadDate) {
+    console.log('previewMedia called with:', { fileId, mimeType, fileUrl, fileName, fileSize, uploadDate });
+    
     currentMediaFile = { fileId, mimeType, fileUrl, fileName, fileSize, uploadDate };
     
     const modal = document.getElementById('mediaPreviewModal');
@@ -2137,19 +2152,26 @@ function previewMedia(fileId, mimeType, fileUrl, fileName, fileSize, uploadDate)
     const container = document.getElementById('mediaPreviewContainer');
     const info = document.getElementById('mediaPreviewInfo');
     
-    if (!modal || !container) return;
+    console.log('Modal elements:', { modal, title, container, info });
+    
+    if (!modal || !container) {
+        console.error('Modal or container not found');
+        return;
+    }
     
     // Set title
     if (title) title.textContent = fileName;
     
     // Create media preview
     let mediaElement = '';
+    console.log('Creating media element for MIME type:', mimeType, 'with URL:', fileUrl);
+    
     if (mimeType.startsWith('image/')) {
-        mediaElement = `<img src="${fileUrl}" alt="${fileName}">`;
+        mediaElement = `<img src="${fileUrl}" alt="${fileName}" style="max-width: 100%; max-height: 70vh; object-fit: contain;" onload="console.log('Image loaded successfully')" onerror="console.error('Image failed to load:', this.src)">`;
     } else if (mimeType.startsWith('video/')) {
-        mediaElement = `<video src="${fileUrl}" controls></video>`;
+        mediaElement = `<video src="${fileUrl}" controls style="max-width: 100%; max-height: 70vh;"></video>`;
     } else if (mimeType.startsWith('audio/')) {
-        mediaElement = `<audio src="${fileUrl}" controls></audio>`;
+        mediaElement = `<audio src="${fileUrl}" controls style="width: 100%;"></audio>`;
     } else {
         mediaElement = `<div style="text-align: center; padding: 2rem;">
             <i class="fas fa-file fa-4x" style="color: #6b7280; margin-bottom: 1rem;"></i>
@@ -2157,7 +2179,9 @@ function previewMedia(fileId, mimeType, fileUrl, fileName, fileSize, uploadDate)
         </div>`;
     }
     
+    console.log('Generated media element:', mediaElement);
     container.innerHTML = mediaElement;
+    console.log('Container content after setting innerHTML:', container.innerHTML);
     
     // Set file info and ensure it starts collapsed
     if (info) {
@@ -2191,8 +2215,21 @@ function previewMedia(fileId, mimeType, fileUrl, fileName, fileSize, uploadDate)
     }
     
     // Show modal
+    console.log('Showing modal');
     modal.style.display = 'block';
     document.body.style.overflow = 'hidden';
+    console.log('Modal display style set to:', modal.style.display);
+}
+
+// Test function to debug modal
+function testMediaPreview() {
+    console.log('Testing media preview modal');
+    const modal = document.getElementById('mediaPreviewModal');
+    console.log('Modal found:', modal);
+    if (modal) {
+        modal.style.display = 'block';
+        console.log('Modal display set to:', modal.style.display);
+    }
 }
 
 // Close media preview modal
@@ -2711,7 +2748,7 @@ function displayCards(cards) {
                     ${card.media.map(media => `
                         <div class="card-media-item">
                             <img src="${media.file_url || media.download_url}" alt="${media.displayName || media.original_name}" 
-                                 onclick="previewMedia('${media.file_url || media.download_url}', '${media.displayName || media.original_name}')">
+                                 onclick="previewCardMedia('${media.file_url || media.download_url}', '${media.displayName || media.original_name}')">>
                         </div>
                     `).join('')}
                 </div>
@@ -3531,7 +3568,7 @@ async function removeCardMedia(cardId, mediaId) {
 }
 
 // Preview media function
-function previewMedia(url, name) {
+function previewCardMedia(url, name) {
     const modalHtml = `
         <div class="modal" id="mediaPreviewModal" style="display: block;">
             <div class="modal-content media-preview-modal">

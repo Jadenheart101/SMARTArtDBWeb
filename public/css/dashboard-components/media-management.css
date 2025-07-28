@@ -25,6 +25,32 @@
     flex-wrap: wrap;
 }
 
+/* Make buttons more visible in media section */
+.media-actions .btn-primary {
+    background: #3b82f6;
+    color: white;
+    border: 1px solid #2563eb;
+    backdrop-filter: none;
+}
+
+.media-actions .btn-primary:hover {
+    background: #2563eb;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.media-actions .btn-info {
+    background: #06b6d4;
+    color: white;
+    border: 1px solid #0891b2;
+}
+
+.media-actions .btn-info:hover {
+    background: #0891b2;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
+}
+
 .media-stats {
     display: flex;
     gap: 2rem;
