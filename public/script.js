@@ -1945,7 +1945,7 @@ function displayMediaFiles(files) {
         gallery.innerHTML = '<div class="media-loading">No media files found. Upload your first file!</div>';
         return;
     }
-    
+
     gallery.innerHTML = files.map(file => {
         const isImage = file.mimeType && file.mimeType.startsWith('image/');
         const isVideo = file.mimeType && file.mimeType.startsWith('video/');
@@ -1956,7 +1956,7 @@ function displayMediaFiles(files) {
         let typeBadge = 'FILE';
 
         if (isImage) {
-            thumbnail = `<img src="${file.url}" alt="${file.name}" loading="lazy">`;
+            thumbnail = `<img src="${file.url}" alt="${file.customName || file.originalName}" loading="lazy">`;
             typeIcon = 'fas fa-image';
             typeBadge = 'IMAGE';
         } else if (isVideo) {
@@ -1971,14 +1971,15 @@ function displayMediaFiles(files) {
             thumbnail = `<i class="${typeIcon}"></i>`;
         }
 
-        const fileSize = formatFileSize(file.size);
-        // Prefer customName, then originalName, then name
-        const fileName = file.customName || file.originalName || file.name;
-        const uploadDate = file.createdAt ? new Date(file.createdAt).toLocaleDateString() :
-                          file.createdDateTime ? new Date(file.createdDateTime).toLocaleDateString() : 'Unknown';
+        const fileSize = formatFileSize(file.size || 0);
+        // Prefer displayName, then originalName, then name
+        const fileName = file.displayName || file.originalName || file.name;
+        const createdDate = file.createdAt ? new Date(file.createdAt).toLocaleDateString() : 'Unknown';
+        const updatedDate = file.updatedAt ? new Date(file.updatedAt).toLocaleDateString() : 'Unknown';
+        const fileType = file.fileType || (file.mimeType ? file.mimeType.split('/')[0] : 'unknown');
 
         return `
-            <div class="media-item" onclick="previewMedia('${file.id}', '${file.mimeType}', '${file.url}', '${fileName}', '${fileSize}', '${uploadDate}')">
+            <div class="media-item" onclick="previewMedia('${file.id}', '${file.mimeType}', '${file.url}', '${fileName}', '${fileSize}', '${createdDate}')">
                 <div class="media-thumbnail">
                     ${thumbnail}
                     <div class="media-type-badge">${typeBadge}</div>
@@ -1986,13 +1987,118 @@ function displayMediaFiles(files) {
                 <div class="media-info">
                     <div class="media-name" title="${fileName}">${fileName}</div>
                     <div class="media-meta">
-                        <span class="media-size">${fileSize}</span>
-                        <span class="media-date">${uploadDate}</span>
+                        <div class="media-row">
+                            <span class="media-label">Type:</span>
+                            <span class="media-value">${fileType.toUpperCase()}</span>
+                        </div>
+                        <div class="media-row">
+                            <span class="media-label">Size:</span>
+                            <span class="media-value">${fileSize}</span>
+                        </div>
+                        <div class="media-row">
+                            <span class="media-label">Created:</span>
+                            <span class="media-value">${createdDate}</span>
+                        </div>
+                        <div class="media-row">
+                            <span class="media-label">Updated:</span>
+                            <span class="media-value">${updatedDate}</span>
+                        </div>
                     </div>
+                </div>
+                <div class="media-actions-overlay">
+                    <button class="media-action-btn" onclick="event.stopPropagation(); quickRename('${file.id}', '${fileName}')" title="Rename">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="media-action-btn delete-btn" onclick="event.stopPropagation(); quickDelete('${file.id}', '${fileName}')" title="Delete">
+                        <i class="fas fa-trash"></i>
+                    </button>
                 </div>
             </div>
         `;
     }).join('');
+}
+
+// Quick rename function for media library
+async function quickRename(fileId, currentDisplayName) {
+    const newName = prompt('Enter new display name:', currentDisplayName);
+    if (newName !== null && newName.trim() !== '' && newName.trim() !== currentDisplayName) {
+        const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+        
+        if (!currentUser || !currentUser.id) {
+            showNotification('User not logged in', 'error');
+            return;
+        }
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/media/file/${fileId}/display-name`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ 
+                    userId: currentUser.id, 
+                    displayName: newName.trim() 
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                showNotification('Display name updated successfully', 'success');
+                refreshMediaGallery(); // Refresh the gallery to show the updated name
+            } else {
+                showNotification(result.message || 'Failed to update display name', 'error');
+            }
+        } catch (error) {
+            console.error('Rename error:', error);
+            showNotification('Failed to update display name', 'error');
+        }
+    }
+}
+
+// Quick delete function for media library
+function quickDelete(filename, displayName) {
+    if (confirm(`Are you sure you want to delete "${displayName}"?`)) {
+        deleteFile(filename);
+    }
+}
+
+// Delete file by fileId
+async function deleteFile(fileId) {
+    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    
+    console.log('Delete file called with:', { fileId, currentUser });
+    
+    if (!currentUser || !currentUser.id) {
+        showNotification('User not logged in', 'error');
+        return;
+    }
+    
+    try {
+        const requestBody = { userId: currentUser.id };
+        console.log('Sending DELETE request:', { fileId, requestBody });
+        
+        const response = await fetch(`${API_BASE_URL}/media/file/${fileId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+        });
+        
+        const result = await response.json();
+        console.log('Delete response:', result);
+        
+        if (result.success) {
+            showNotification('File deleted successfully', 'success');
+            refreshMediaGallery(); // Refresh the gallery to update the display
+        } else {
+            showNotification(result.message || 'Failed to delete file', 'error');
+        }
+    } catch (error) {
+        console.error('Delete error:', error);
+        showNotification('Failed to delete file', 'error');
+    }
 }
 
 // Update media statistics

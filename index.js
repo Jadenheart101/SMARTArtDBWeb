@@ -169,6 +169,7 @@ app.get('/api', (req, res) => {
       'POST /api/media/upload': 'Upload media file',
       'GET /api/media/files': 'List user media files',
       'GET /api/media/file/:fileId': 'Get media file info',
+      'PUT /api/media/file/:fileId/display-name': 'Update media file display name',
       'DELETE /api/media/file/:fileId': 'Delete media file',
       'GET /api/users/:userId/media': 'Get user media files'
     }
@@ -749,11 +750,13 @@ app.get('/api/media/files', async (req, res) => {
           id: file.id,
           name: file.file_name,
           originalName: file.original_name,
-                   customName: file.displayName,
-                   url: file.file_url || file.download_url, // fallback to download_url if file_url is null
-                   size: file.file_size,
-                   mimeType: file.mime_type,
-                   createdAt: file.created_at
+          displayName: file.displayName,
+          url: file.file_url || file.download_url, // fallback to download_url if file_url is null
+          size: file.file_size,
+          mimeType: file.mime_type,
+          fileType: file.mime_type ? file.mime_type.split('/')[0] : 'unknown', // Extract main type (image, video, audio, etc.)
+          createdAt: file.created_at,
+          updatedAt: file.updated_at
         });
       } else {
         // Remove from database if file doesn't exist
@@ -874,33 +877,81 @@ app.put('/api/media/file/:fileId/rename', async (req, res) => {
   }
 });
 
-// Delete media file
-app.delete('/api/media/file/:fileId', async (req, res) => {
+// Update media file display name
+app.put('/api/media/file/:fileId/display-name', async (req, res) => {
   try {
     const { fileId } = req.params;
-    const { userId } = req.body;
+    const { userId, displayName } = req.body;
     
-    if (!userId) {
-      return res.status(400).json({ success: false, message: 'User ID is required' });
+    if (!userId || !displayName) {
+      return res.status(400).json({ success: false, message: 'User ID and display name are required' });
     }
     
-    // Get file info
+    // Get file info to verify ownership
     const files = await executeQuery('SELECT * FROM media_files WHERE id = ? AND user_id = ?', [fileId, userId]);
     
     if (files.length === 0) {
       return res.status(404).json({ success: false, message: 'File not found or access denied' });
     }
     
+    // Update display name in database
+    await executeQuery(
+      'UPDATE media_files SET displayName = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [displayName, fileId]
+    );
+    
+    res.json({
+      success: true,
+      message: 'Display name updated successfully',
+      file: {
+        id: fileId,
+        displayName: displayName
+      }
+    });
+  } catch (error) {
+    console.error('Display name update error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update display name', error: error.message });
+  }
+});
+
+// Delete media file
+app.delete('/api/media/file/:fileId', async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const { userId } = req.body;
+    
+    console.log('Delete request received:', { fileId, userId, body: req.body });
+    
+    if (!userId) {
+      console.log('No userId provided');
+      return res.status(400).json({ success: false, message: 'User ID is required' });
+    }
+    
+    // Get file info
+    console.log('Querying for file:', { fileId, userId });
+    const files = await executeQuery('SELECT * FROM media_files WHERE id = ? AND user_id = ?', [fileId, userId]);
+    console.log('Query result:', files);
+    
+    if (files.length === 0) {
+      console.log('File not found or access denied');
+      return res.status(404).json({ success: false, message: 'File not found or access denied' });
+    }
+    
     const file = files[0];
+    console.log('File to delete:', file);
     
     try {
       // Delete file from disk
       if (fs.existsSync(file.file_path)) {
         fs.unlinkSync(file.file_path);
+        console.log('File deleted from disk:', file.file_path);
+      } else {
+        console.log('File not found on disk:', file.file_path);
       }
       
       // Remove from database
       await executeQuery('DELETE FROM media_files WHERE id = ?', [fileId]);
+      console.log('File deleted from database');
       
       res.json({ success: true, message: 'File deleted successfully' });
     } catch (error) {

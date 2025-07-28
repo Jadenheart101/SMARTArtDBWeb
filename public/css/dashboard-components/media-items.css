@@ -70,9 +70,30 @@
 .media-meta {
     font-size: 0.75rem;
     color: #6b7280;
+}
+
+.media-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    margin-bottom: 0.25rem;
+}
+
+.media-row:last-child {
+    margin-bottom: 0;
+}
+
+.media-label {
+    font-weight: 500;
+    color: #374151;
+    min-width: 60px;
+}
+
+.media-value {
+    font-weight: 400;
+    color: #6b7280;
+    text-align: right;
+    flex: 1;
 }
 
 .media-size {
@@ -81,4 +102,70 @@
 
 .media-date {
     font-style: italic;
+}
+
+/* Media Action Overlay Styles */
+.media-actions-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.media-item:hover .media-actions-overlay {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.media-action-btn {
+    background: rgba(255, 255, 255, 0.9);
+    border: none;
+    border-radius: 6px;
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: #374151;
+}
+
+.media-action-btn:hover {
+    background: white;
+    transform: scale(1.05);
+}
+
+.media-action-btn.rename {
+    color: #3b82f6;
+}
+
+.media-action-btn.delete {
+    color: #ef4444;
+}
+
+.media-action-btn.rename:hover {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.media-action-btn.delete:hover {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.media-action-btn.delete-btn {
+    color: #ef4444;
+}
+
+.media-action-btn.delete-btn:hover {
+    background: #fee2e2;
+    color: #dc2626;
 }
