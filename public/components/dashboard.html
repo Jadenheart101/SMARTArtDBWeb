@@ -54,15 +54,20 @@
                     <div class="topics-list" id="editTopicsList">
                         <!-- Topics will be loaded here -->
                     </div>
-                    <button type="button" class="btn btn-secondary btn-sm" onclick="addEditTopic()">
-                        <i class="fas fa-plus"></i> Add Topic
-                    </button>
+                    <div class="topics-actions">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="addEditTopic()">
+                            <i class="fas fa-plus"></i> Add Topic
+                        </button>
+                        <button type="button" class="btn btn-primary btn-sm" onclick="showAddCardModal()">
+                            <i class="fas fa-plus"></i> Add Card
+                        </button>
+                    </div>
                 </div>
             </div>
             
             <div class="form-actions" style="display: flex !important; gap: 1rem; justify-content: flex-end; margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #e5e7eb; background: white; position: sticky; bottom: 0; z-index: 100;">
                 <button type="button" class="btn btn-secondary" onclick="closeEditProjectModal()" style="display: inline-block !important; visibility: visible !important;">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="saveEditProject()" style="display: inline-block !important; visibility: visible !important;">Save</button>
+                <button type="submit" class="btn btn-primary" style="display: inline-block !important; visibility: visible !important;">Save</button>
             </div>
         </form>
         </div>

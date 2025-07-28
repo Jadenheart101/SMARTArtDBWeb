@@ -2571,6 +2571,12 @@ function displayPOIs(pois) {
                 ` : `
                     <small class="poi-no-image" style="color: #9ca3af; font-style: italic;">No image</small>
                 `}
+                ${poi.pLocation ? `
+                    <div class="poi-location-description" style="margin-top: 8px; padding: 8px; background: #f8fafc; border-radius: 4px; border-left: 3px solid #3b82f6;">
+                        <strong style="color: #1e40af; font-size: 0.9em;">Location:</strong>
+                        <p style="margin: 4px 0 0 0; color: #374151; font-size: 0.9em;">${escapeHtml(poi.pLocation)}</p>
+                    </div>
+                ` : ''}
             </div>
             <div class="poi-cards">
                 ${displayCards(poi.cards || [])}
@@ -2589,10 +2595,21 @@ function displayCards(cards) {
         <div class="card-item" data-card-id="${card.CardID}">
             <div class="card-header">
                 <h6>${escapeHtml(card.Title)}</h6>
+                <span class="card-type-badge">Type ${card.Type}</span>
             </div>
             <div class="card-body">
                 ${card.Body ? escapeHtml(card.Body).replace(/\n/g, '<br>') : '<em>No content</em>'}
             </div>
+            ${card.media && card.media.length > 0 ? `
+                <div class="card-media">
+                    ${card.media.map(media => `
+                        <div class="card-media-item">
+                            <img src="${media.file_url || media.download_url}" alt="${media.displayName || media.original_name}" 
+                                 onclick="previewMedia('${media.file_url || media.download_url}', '${media.displayName || media.original_name}')">
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
             ${card.Notes ? `<div class="card-notes"><strong>Notes:</strong> ${escapeHtml(card.Notes)}</div>` : ''}
             ${card.References ? `<div class="card-references"><strong>References:</strong> ${escapeHtml(card.References)}</div>` : ''}
         </div>
@@ -2711,6 +2728,17 @@ function displayEditPOIs(pois, topicId) {
                     <i class="fas fa-trash"></i>
                 </button>
             </div>
+            <div class="poi-location-edit" style="margin: 8px 0;">
+                <label style="display: block; margin-bottom: 4px; font-weight: 500; color: #374151; font-size: 0.9em;">
+                    <i class="fas fa-map-marker-alt"></i> Location Description:
+                </label>
+                <textarea 
+                    id="poi-location-${poi.POIID}" 
+                    placeholder="Describe where this POI is located..." 
+                    style="width: 100%; padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.9em; resize: vertical; min-height: 50px;"
+                    onblur="updatePOILocation(${poi.POIID}, this.value)"
+                >${poi.pLocation || ''}</textarea>
+            </div>
             <div class="poi-cards-edit">
                 ${displayEditCards(poi.cards || [])}
             </div>
@@ -2790,6 +2818,28 @@ function displayEditCards(cards) {
                    onblur="updateCardNotes(${card.CardID}, this.value)" placeholder="Notes (optional)">
             <input type="text" class="card-references-input" value="${escapeHtml(card.References || '')}" 
                    onblur="updateCardReferences(${card.CardID}, this.value)" placeholder="References (optional)">
+            
+            <div class="card-media-management">
+                <div class="card-media-header">
+                    <span>Attached Media:</span>
+                    <button type="button" class="btn btn-xs btn-primary" onclick="showAttachMediaModal(${card.CardID})">
+                        <i class="fas fa-plus"></i> Attach Media
+                    </button>
+                </div>
+                <div class="card-media-list">
+                    ${card.media && card.media.length > 0 ? card.media.map(media => `
+                        <div class="card-media-edit-item" data-media-id="${media.id}">
+                            <img src="${media.file_url || media.download_url}" alt="${media.displayName || media.original_name}">
+                            <div class="media-info">
+                                <span class="media-name">${media.displayName || media.original_name}</span>
+                                <button type="button" class="btn btn-xs btn-danger" onclick="removeCardMedia(${card.CardID}, ${media.id})">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `).join('') : '<div class="no-media"><em>No media attached</em></div>'}
+                </div>
+            </div>
         </div>
     `).join('');
 }
@@ -3054,6 +3104,42 @@ async function removePOIImage(poiId) {
     }
 }
 
+// Update POI location description
+async function updatePOILocation(poiId, locationDescription) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/pois/${poiId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                pLocation: locationDescription
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('POI location updated successfully', 'success');
+            // Update the topic in memory
+            const topic = currentProjectTopics.find(t => 
+                t.pois && t.pois.some(p => p.POIID === poiId)
+            );
+            if (topic) {
+                const poi = topic.pois.find(p => p.POIID === poiId);
+                if (poi) {
+                    poi.pLocation = locationDescription;
+                }
+            }
+        } else {
+            showNotification('Failed to update POI location', 'error');
+        }
+    } catch (error) {
+        console.error('Error updating POI location:', error);
+        showNotification('Failed to update POI location', 'error');
+    }
+}
+
 // Add card to POI
 async function addCardToPOI(poiId) {
     // Create a simple modal to select card type
@@ -3227,6 +3313,266 @@ async function deleteCard(cardId) {
     } catch (error) {
         console.error('Error deleting card:', error);
         showNotification('Failed to delete card', 'error');
+    }
+}
+
+// Show modal to attach media to card
+async function showAttachMediaModal(cardId) {
+    try {
+        const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+        const response = await fetch(`${API_BASE_URL}/media/files?userId=${currentUser.id}`);
+        const result = await response.json();
+        
+        if (result.success && result.data && result.data.length > 0) {
+            // Create modal HTML
+            const modalHtml = `
+                <div class="modal" id="attachMediaModal" style="display: block;">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3>Attach Media to Card</h3>
+                            <span class="close" onclick="closeAttachMediaModal()">&times;</span>
+                        </div>
+                        <div class="modal-body">
+                            <div class="media-grid">
+                                ${result.data.map(media => `
+                                    <div class="media-item-select" onclick="attachMediaToCard(${cardId}, ${media.id})">
+                                        <img src="${media.file_url || media.download_url}" alt="${media.displayName || media.original_name}">
+                                        <div class="media-name">${media.displayName || media.original_name}</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Add modal to body
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        } else {
+            showNotification('No media files found. Upload some media first!', 'warning');
+        }
+    } catch (error) {
+        console.error('Error loading media files:', error);
+        showNotification('Failed to load media files', 'error');
+    }
+}
+
+// Close attach media modal
+function closeAttachMediaModal() {
+    const modal = document.getElementById('attachMediaModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// Attach media to card
+async function attachMediaToCard(cardId, mediaId) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/cards/${cardId}/media`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ mediaId: mediaId })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            showNotification('Media attached successfully', 'success');
+            closeAttachMediaModal();
+            
+            // Refresh the project display
+            if (window.currentEditingProjectId) {
+                await loadEditTopics(window.currentEditingProjectId);
+                displayEditTopics();
+            }
+        } else {
+            showNotification(result.message || 'Failed to attach media', 'error');
+        }
+    } catch (error) {
+        console.error('Error attaching media:', error);
+        showNotification('Failed to attach media', 'error');
+    }
+}
+
+// Remove media from card
+async function removeCardMedia(cardId, mediaId) {
+    if (!confirm('Remove this media from the card?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/cards/${cardId}/media/${mediaId}`, {
+            method: 'DELETE'
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            showNotification('Media removed successfully', 'success');
+            
+            // Refresh the project display
+            if (window.currentEditingProjectId) {
+                await loadEditTopics(window.currentEditingProjectId);
+                displayEditTopics();
+            }
+        } else {
+            showNotification(result.message || 'Failed to remove media', 'error');
+        }
+    } catch (error) {
+        console.error('Error removing media:', error);
+        showNotification('Failed to remove media', 'error');
+    }
+}
+
+// Preview media function
+function previewMedia(url, name) {
+    const modalHtml = `
+        <div class="modal" id="mediaPreviewModal" style="display: block;">
+            <div class="modal-content media-preview-modal">
+                <div class="modal-header">
+                    <h3>${name}</h3>
+                    <span class="close" onclick="closeMediaPreview()">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <img src="${url}" alt="${name}" style="max-width: 100%; max-height: 80vh;">
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+// Close media preview
+function closeMediaPreview() {
+    const modal = document.getElementById('mediaPreviewModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// Show modal to add card with POI selection
+async function showAddCardModal() {
+    if (!currentProjectTopics || currentProjectTopics.length === 0) {
+        showNotification('Please add topics and POIs first', 'warning');
+        return;
+    }
+
+    // Get all POIs from all topics
+    const allPois = [];
+    for (const topic of currentProjectTopics) {
+        if (topic.pois && topic.pois.length > 0) {
+            for (const poi of topic.pois) {
+                allPois.push({
+                    ...poi,
+                    topicLabel: topic.Label
+                });
+            }
+        }
+    }
+
+    if (allPois.length === 0) {
+        showNotification('Please add POIs first before creating cards', 'warning');
+        return;
+    }
+
+    const modalHtml = `
+        <div class="modal" id="addCardModal" style="display: block;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Add New Card</h3>
+                    <span class="close" onclick="closeAddCardModal()">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="cardTitle">Card Title</label>
+                        <input type="text" id="cardTitle" placeholder="Enter card title" value="New Card">
+                    </div>
+                    <div class="form-group">
+                        <label for="cardType">Card Type</label>
+                        <select id="cardType">
+                            <option value="1">Single</option>
+                            <option value="2">Two Column</option>
+                            <option value="3">Media</option>
+                            <option value="4">Text and Media</option>
+                            <option value="5">Media and Text</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="cardPOI">Select POI</label>
+                        <select id="cardPOI">
+                            ${allPois.map(poi => `
+                                <option value="${poi.POIID}">
+                                    ${poi.topicLabel} → POI ${poi.POIID} (${poi.XCoord}, ${poi.YCoord})
+                                </option>
+                            `).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="cardBody">Card Content (optional)</label>
+                        <textarea id="cardBody" placeholder="Enter card content" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeAddCardModal()">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="createCardFromModal()">Create Card</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+// Close add card modal
+function closeAddCardModal() {
+    const modal = document.getElementById('addCardModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// Create card from modal
+async function createCardFromModal() {
+    const title = document.getElementById('cardTitle').value.trim();
+    const type = parseInt(document.getElementById('cardType').value);
+    const poiId = parseInt(document.getElementById('cardPOI').value);
+    const body = document.getElementById('cardBody').value.trim();
+
+    if (!title) {
+        showNotification('Please enter a card title', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/pois/${poiId}/cards`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                Title: title,
+                Body: body,
+                Type: type
+            })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            showNotification('Card created successfully', 'success');
+            closeAddCardModal();
+            
+            // Refresh the project display
+            if (window.currentEditingProjectId) {
+                await loadEditTopics(window.currentEditingProjectId);
+                displayEditTopics();
+            }
+        } else {
+            showNotification(result.message || 'Failed to create card', 'error');
+        }
+    } catch (error) {
+        console.error('Error creating card:', error);
+        showNotification('Failed to create card', 'error');
     }
 }
 

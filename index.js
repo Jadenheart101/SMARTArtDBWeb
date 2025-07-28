@@ -163,6 +163,9 @@ app.get('/api', (req, res) => {
       'DELETE /api/cards/:id': 'Delete card',
       'GET /api/cards': 'Get all cards',
       'POST /api/cards': 'Create new card',
+      'POST /api/cards/:id/media': 'Attach media to card',
+      'GET /api/cards/:id/media': 'Get media for card',
+      'DELETE /api/cards/:cardId/media/:mediaId': 'Remove media from card',
       'POST /api/media/upload': 'Upload media file',
       'GET /api/media/files': 'List user media files',
       'GET /api/media/file/:fileId': 'Get media file info',
@@ -954,7 +957,19 @@ app.get('/api/projects/:id/topics', async (req, res) => {
           'SELECT * FROM card WHERE POIID_FK = ? ORDER BY CardID',
           [poi.POIID]
         );
-        return { ...poi, cards };
+        
+        // For each card, get its media
+        const cardsWithMedia = await Promise.all(cards.map(async (card) => {
+          const media = await executeQuery(`
+            SELECT mf.*, cm.Card_Media_ID 
+            FROM card_media cm
+            JOIN media_files mf ON cm.Media_ID_FK = mf.id
+            WHERE cm.Card_ID_FK = ?
+          `, [card.CardID]);
+          return { ...card, media };
+        }));
+        
+        return { ...poi, cards: cardsWithMedia };
       }));
       
       return { 
@@ -1098,7 +1113,7 @@ app.post('/api/topics/:id/pois', async (req, res) => {
 app.put('/api/pois/:id', async (req, res) => {
   try {
     const poiId = req.params.id;
-    const { XCoord, YCoord, pImage } = req.body;
+    const { XCoord, YCoord, pImage, pLocation } = req.body;
     
     const updateFields = [];
     const updateValues = [];
@@ -1116,6 +1131,11 @@ app.put('/api/pois/:id', async (req, res) => {
     if (pImage !== undefined) {
       updateFields.push('pImage = ?');
       updateValues.push(pImage);
+    }
+    
+    if (pLocation !== undefined) {
+      updateFields.push('pLocation = ?');
+      updateValues.push(pLocation);
     }
     
     if (updateFields.length === 0) {
@@ -1265,6 +1285,68 @@ app.delete('/api/cards/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting card:', error);
     res.status(500).json({ success: false, message: 'Error deleting card', error: error.message });
+  }
+});
+
+// Attach media to card
+app.post('/api/cards/:id/media', async (req, res) => {
+  try {
+    const cardId = req.params.id;
+    const { mediaId } = req.body;
+
+    if (!mediaId) {
+      return res.status(400).json({ success: false, message: 'Media ID is required' });
+    }
+
+    // Get next available Card_Media_ID
+    const maxCardMedia = await executeQuery('SELECT MAX(Card_Media_ID) as maxId FROM card_media');
+    const nextCardMediaId = (maxCardMedia[0]?.maxId || 0) + 1;
+
+    const result = await executeQuery(
+      'INSERT INTO card_media (Card_Media_ID, Card_ID_FK, Media_ID_FK) VALUES (?, ?, ?)',
+      [nextCardMediaId, cardId, mediaId]
+    );
+
+    res.status(201).json({ success: true, message: 'Media attached to card successfully' });
+  } catch (error) {
+    console.error('Error attaching media to card:', error);
+    res.status(500).json({ success: false, message: 'Error attaching media', error: error.message });
+  }
+});
+
+// Get media for card
+app.get('/api/cards/:id/media', async (req, res) => {
+  try {
+    const cardId = req.params.id;
+    
+    const media = await executeQuery(`
+      SELECT mf.*, cm.Card_Media_ID 
+      FROM card_media cm
+      JOIN media_files mf ON cm.Media_ID_FK = mf.id
+      WHERE cm.Card_ID_FK = ?
+    `, [cardId]);
+    
+    res.json({ success: true, data: media });
+  } catch (error) {
+    console.error('Error fetching card media:', error);
+    res.status(500).json({ success: false, message: 'Error fetching card media', error: error.message });
+  }
+});
+
+// Remove media from card
+app.delete('/api/cards/:cardId/media/:mediaId', async (req, res) => {
+  try {
+    const { cardId, mediaId } = req.params;
+    
+    const result = await executeQuery(
+      'DELETE FROM card_media WHERE Card_ID_FK = ? AND Media_ID_FK = ?',
+      [cardId, mediaId]
+    );
+    
+    res.json({ success: true, message: 'Media removed from card successfully' });
+  } catch (error) {
+    console.error('Error removing media from card:', error);
+    res.status(500).json({ success: false, message: 'Error removing media', error: error.message });
   }
 });
 
