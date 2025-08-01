@@ -1,8 +1,22 @@
 /* Media Preview Modal Styles */
+#mediaPreviewModal {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#mediaPreviewModal.modal[style*="display: block"] {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+}
+
 .media-preview-content {
     max-width: 90vw;
     max-height: 90vh;
     width: auto;
+    margin: 0;
+    position: relative;
 }
 
 .media-preview-header {
@@ -47,6 +61,21 @@
 .media-preview-actions .btn {
     min-width: 120px;
     justify-content: center;
+}
+
+/* Make download button visible in media preview modal */
+.media-preview-actions .btn-primary {
+    background: #059669;
+    color: white;
+    border: 1px solid #047857;
+    backdrop-filter: none;
+    font-weight: 600;
+}
+
+.media-preview-actions .btn-primary:hover {
+    background: #047857;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
 }
 
 /* Responsive Media Preview */
