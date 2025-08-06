@@ -10,7 +10,12 @@ const dbConfig = {
   database: process.env.DB_NAME,
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  // SSL configuration for Azure MySQL (required)
+  ssl: process.env.DB_HOST && process.env.DB_HOST.includes('.mysql.database.azure.com') ? {
+    rejectUnauthorized: false
+  } : false,
+  connectTimeout: 60000
 };
 
 // Create connection pool

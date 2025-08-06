@@ -40,7 +40,14 @@
     flex: 1;
 }
 
-.btn-create-project {
+.projects-header-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.btn-create-project,
+.btn-create-artwork {
     padding: 0.75rem 1.5rem;
     background: var(--primary-color, #3498db);
     color: white;
@@ -57,14 +64,26 @@
     box-shadow: 0 2px 4px rgba(52, 152, 219, 0.2);
 }
 
-.btn-create-project:hover {
+.btn-create-project:hover,
+.btn-create-artwork:hover {
     background: var(--primary-hover, #2980b9);
     transform: translateY(-1px);
     box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
 }
 
-.btn-create-project i {
+.btn-create-project i,
+.btn-create-artwork i {
     font-size: 0.9rem;
+}
+
+.btn-create-artwork {
+    background: var(--secondary-color, #9b59b6);
+    box-shadow: 0 2px 4px rgba(155, 89, 182, 0.2);
+}
+
+.btn-create-artwork:hover {
+    background: var(--secondary-hover, #8e44ad);
+    box-shadow: 0 4px 8px rgba(155, 89, 182, 0.3);
 }
 
 .projects-section h3 i {
@@ -378,7 +397,13 @@
         text-align: center;
     }
     
-    .btn-create-project {
+    .projects-header-actions {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+    
+    .btn-create-project,
+    .btn-create-artwork {
         justify-content: center;
         padding: 1rem;
         font-size: 1rem;

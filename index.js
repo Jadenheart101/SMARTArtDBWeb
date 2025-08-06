@@ -317,7 +317,7 @@ app.get('/api/art/:id', async (req, res) => {
 });
 
 app.post('/api/art', async (req, res) => {
-  const { ArtistName, Submitor, Date, ArtMedia, ArtName, artcol } = req.body;
+  const { ArtistName, Submitor, Date: artDate, ArtMedia, ArtName, artcol } = req.body;
   
   if (!ArtistName || !ArtName) {
     return res.status(400).json({ success: false, message: 'ArtistName and ArtName are required' });
@@ -329,7 +329,7 @@ app.post('/api/art', async (req, res) => {
     
     const result = await executeQuery(
       'INSERT INTO art (ArtId, ArtistName, Submitor, Date, ArtMedia, ArtName, artcol) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [nextArtId, ArtistName, Submitor, Date || new Date().toISOString().split('T')[0], ArtMedia, ArtName, artcol]
+      [nextArtId, ArtistName, Submitor || null, artDate || new Date().toISOString().split('T')[0], ArtMedia || null, ArtName, artcol || null]
     );
     
     const newArtwork = await executeQuery('SELECT * FROM art WHERE ArtId = ?', [nextArtId]);
@@ -340,12 +340,12 @@ app.post('/api/art', async (req, res) => {
 });
 
 app.put('/api/art/:id', async (req, res) => {
-  const { ArtistName, Submitor, Date, ArtMedia, ArtName, artcol } = req.body;
+  const { ArtistName, Submitor, Date: artDate, ArtMedia, ArtName, artcol } = req.body;
   
   try {
     const result = await executeQuery(
       'UPDATE art SET ArtistName = ?, Submitor = ?, Date = ?, ArtMedia = ?, ArtName = ?, artcol = ? WHERE ArtId = ?',
-      [ArtistName, Submitor, Date, ArtMedia, ArtName, artcol, req.params.id]
+      [ArtistName, Submitor, artDate, ArtMedia, ArtName, artcol, req.params.id]
     );
     
     if (result.affectedRows === 0) {
@@ -637,7 +637,7 @@ app.delete('/api/projects/:id', async (req, res) => {
 // Card API Routes
 app.get('/api/cards', async (req, res) => {
   try {
-    const cards = await executeQuery('SELECT * FROM card ORDER BY CardID');
+    const cards = await executeQuery('SELECT *, id as CardID, poi_id as POIID_FK, card_title as Title, card_content as Body FROM card ORDER BY card_order, id');
     res.json({ success: true, data: cards });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error fetching cards', error: error.message });
@@ -645,22 +645,26 @@ app.get('/api/cards', async (req, res) => {
 });
 
 app.post('/api/cards', async (req, res) => {
-  const { Title, Body, Type, POIID_FK, Notes, References } = req.body;
+  const { Title, Body, Type, POIID_FK, Notes, References, card_title, card_content, poi_id } = req.body;
   
-  if (!Title) {
-    return res.status(400).json({ success: false, message: 'Title is required' });
+  const title = card_title || Title || 'New Card';
+  const content = card_content || Body || '';
+  const poiId = poi_id || POIID_FK;
+  
+  if (!title) {
+    return res.status(400).json({ success: false, message: 'Card title is required' });
   }
   
   try {
-    // Get next available CardID
-    const nextCardId = await getNextAvailableId('card', 'CardID');
+    // Get next available Card ID
+    const nextCardId = await getNextAvailableId('card', 'id');
     
     const result = await executeQuery(
-      'INSERT INTO card (CardID, Title, Body, Type, POIID_FK, Notes, `References`) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [nextCardId, Title, Body, Type, POIID_FK, Notes, References]
+      'INSERT INTO card (id, poi_id, card_title, card_content, card_order) VALUES (?, ?, ?, ?, ?)',
+      [nextCardId, poiId || null, title, content, 0]
     );
     
-    const newCard = await executeQuery('SELECT * FROM card WHERE CardID = ?', [nextCardId]);
+    const newCard = await executeQuery('SELECT *, id as CardID, poi_id as POIID_FK, card_title as Title, card_content as Body FROM card WHERE id = ?', [nextCardId]);
     res.status(201).json({ success: true, data: newCard[0] });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error creating card', error: error.message });
@@ -679,8 +683,24 @@ app.post('/api/media/upload', upload.single('file'), async (req, res) => {
     const { originalname, filename, mimetype, size, path: filePath } = req.file;
     const { userId, customName } = req.body;
     
+    console.log('Upload request received:', {
+      userId,
+      userIdType: typeof userId,
+      customName,
+      filename,
+      mimetype,
+      size
+    });
+    
     if (!userId) {
       return res.status(400).json({ success: false, message: 'User ID is required' });
+    }
+    
+    // Ensure userId is a valid integer
+    const parsedUserId = parseInt(userId, 10);
+    if (isNaN(parsedUserId) || parsedUserId <= 0) {
+      console.log('Invalid userId:', userId, 'parsed as:', parsedUserId);
+      return res.status(400).json({ success: false, message: 'Invalid User ID' });
     }
     
     // Generate file URL
@@ -694,10 +714,23 @@ app.post('/api/media/upload', upload.single('file'), async (req, res) => {
       // Get next available media file ID
       const nextMediaId = await getNextAvailableId('media_files', 'id');
       
+      console.log('Inserting media record:', {
+        id: nextMediaId,
+        user_id: parsedUserId,
+        file_name: filename,
+        original_name: originalname,
+        displayName: customName || null,
+        file_id: uniqueFileId,
+        file_path: filePath,
+        file_url: fileUrl,
+        mime_type: mimetype,
+        file_size: size
+      });
+      
       // Store file info in database
       const result = await executeQuery(
         'INSERT INTO media_files (id, user_id, file_name, original_name, displayName, file_id, file_path, file_url, mime_type, file_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [nextMediaId, userId, filename, originalname, customName || null, uniqueFileId, filePath, fileUrl, mimetype, size]
+        [nextMediaId, parsedUserId, filename, originalname, customName || null, uniqueFileId, filePath, fileUrl, mimetype, size]
       );
       
       res.json({
@@ -988,24 +1021,24 @@ app.get('/api/projects/:id/topics', async (req, res) => {
   try {
     const projectId = req.params.id;
     
-    // Get topics for the project
+    // Get topics for the project using project_topics table
     const topics = await executeQuery(
-      'SELECT * FROM topic WHERE ProjectID_FK = ? ORDER BY TopicID',
+      'SELECT *, id as TopicID, project_id as ProjectID_FK, topic_title as Label FROM project_topics WHERE project_id = ? ORDER BY topic_order, id',
       [projectId]
     );
     
     // For each topic, get its POIs and cards
     const topicsWithContent = await Promise.all(topics.map(async (topic) => {
-      // Get POIs for this topic
+      // Get POIs for this topic (using actual column names)
       const pois = await executeQuery(
-        'SELECT * FROM poi WHERE TopicID_FK = ? ORDER BY POIID',
+        'SELECT *, id as POIID, topic_id as TopicID_FK, x_coordinate as XCoord, y_coordinate as YCoord FROM poi WHERE topic_id = ? ORDER BY id',
         [topic.TopicID]
       );
       
-      // For each POI, get its cards
+      // For each POI, get its cards (using actual column names)
       const poisWithCards = await Promise.all(pois.map(async (poi) => {
         const cards = await executeQuery(
-          'SELECT * FROM card WHERE POIID_FK = ? ORDER BY CardID',
+          'SELECT *, id as CardID, poi_id as POIID_FK, card_title as Title, card_content as Body FROM card WHERE poi_id = ? ORDER BY card_order, id',
           [poi.POIID]
         );
         
@@ -1026,7 +1059,7 @@ app.get('/api/projects/:id/topics', async (req, res) => {
       return { 
         ...topic, 
         pois: poisWithCards,
-        is_expanded: false // Default to collapsed
+        is_expanded: topic.is_expanded || false
       };
     }));
     
@@ -1041,21 +1074,25 @@ app.get('/api/projects/:id/topics', async (req, res) => {
 app.post('/api/projects/:id/topics', async (req, res) => {
   try {
     const projectId = req.params.id;
-    const { Label } = req.body;
+    const { Label, topic_title, topic_content } = req.body;
     
-    if (!Label) {
-      return res.status(400).json({ success: false, message: 'Topic label is required' });
+    const title = topic_title || Label || 'New Topic';
+    const content = topic_content || '';
+    
+    if (!title) {
+      return res.status(400).json({ success: false, message: 'Topic title is required' });
     }
-    // Get next available TopicID
-    const nextTopicId = await getNextAvailableId('topic', 'TopicID');
+    
+    // Get next available topic ID
+    const nextTopicId = await getNextAvailableId('project_topics', 'id');
     
     const result = await executeQuery(
-      'INSERT INTO topic (TopicID, Label, ProjectID_FK) VALUES (?, ?, ?)',
-      [nextTopicId, Label, projectId]
+      'INSERT INTO project_topics (id, project_id, topic_title, topic_content, topic_order) VALUES (?, ?, ?, ?, ?)',
+      [nextTopicId, projectId, title, content, 0]
     );
     
     const newTopic = await executeQuery(
-      'SELECT * FROM topic WHERE TopicID = ?',
+      'SELECT *, id as TopicID, project_id as ProjectID_FK, topic_title as Label FROM project_topics WHERE id = ?',
       [nextTopicId]
     );
     
@@ -1077,22 +1114,42 @@ app.post('/api/projects/:id/topics', async (req, res) => {
 app.put('/api/topics/:id', async (req, res) => {
   try {
     const topicId = req.params.id;
-    const { Label } = req.body;
+    const { Label, topic_title, topic_content, is_expanded } = req.body;
     
-    if (!Label) {
-      return res.status(400).json({ success: false, message: 'Topic label is required' });
+    const updateFields = [];
+    const updateValues = [];
+    
+    if (topic_title || Label) {
+      updateFields.push('topic_title = ?');
+      updateValues.push(topic_title || Label);
     }
     
+    if (topic_content !== undefined) {
+      updateFields.push('topic_content = ?');
+      updateValues.push(topic_content);
+    }
+    
+    if (is_expanded !== undefined) {
+      updateFields.push('is_expanded = ?');
+      updateValues.push(is_expanded);
+    }
+    
+    if (updateFields.length === 0) {
+      return res.status(400).json({ success: false, message: 'No fields to update' });
+    }
+    
+    updateValues.push(topicId);
+    
     const result = await executeQuery(
-      'UPDATE topic SET Label = ? WHERE TopicID = ?',
-      [Label, topicId]
+      `UPDATE project_topics SET ${updateFields.join(', ')} WHERE id = ?`,
+      updateValues
     );
     
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: 'Topic not found' });
     }
     
-    const updatedTopic = await executeQuery('SELECT * FROM topic WHERE TopicID = ?', [topicId]);
+    const updatedTopic = await executeQuery('SELECT *, id as TopicID, project_id as ProjectID_FK, topic_title as Label FROM project_topics WHERE id = ?', [topicId]);
     res.json({ success: true, data: updatedTopic[0] });
   } catch (error) {
     console.error('Error updating project topic:', error);
@@ -1107,15 +1164,15 @@ app.delete('/api/topics/:id', async (req, res) => {
     
     // First delete all cards for POIs in this topic
     await executeQuery(
-      'DELETE c FROM card c INNER JOIN poi p ON c.POIID_FK = p.POIID WHERE p.TopicID_FK = ?',
+      'DELETE c FROM card c INNER JOIN poi p ON c.poi_id = p.id WHERE p.topic_id = ?',
       [topicId]
     );
     
     // Then delete all POIs for this topic
-    await executeQuery('DELETE FROM poi WHERE TopicID_FK = ?', [topicId]);
+    await executeQuery('DELETE FROM poi WHERE topic_id = ?', [topicId]);
     
     // Finally delete the topic
-    const result = await executeQuery('DELETE FROM topic WHERE TopicID = ?', [topicId]);
+    const result = await executeQuery('DELETE FROM project_topics WHERE id = ?', [topicId]);
     
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: 'Topic not found' });
@@ -1132,18 +1189,18 @@ app.delete('/api/topics/:id', async (req, res) => {
 app.post('/api/topics/:id/pois', async (req, res) => {
   try {
     const topicId = req.params.id;
-    const { XCoord, YCoord } = req.body;
+    const { XCoord, YCoord, poi_title, poi_content } = req.body;
     
-    // Get next available POIID
-    const nextPOIId = await getNextAvailableId('poi', 'POIID');
+    // Get next available POI ID
+    const nextPOIId = await getNextAvailableId('poi', 'id');
     
     const result = await executeQuery(
-      'INSERT INTO poi (POIID, TopicID_FK, XCoord, YCoord) VALUES (?, ?, ?, ?)',
-      [nextPOIId, topicId, XCoord || 0, YCoord || 0]
+      'INSERT INTO poi (id, topic_id, poi_title, poi_content, x_coordinate, y_coordinate) VALUES (?, ?, ?, ?, ?, ?)',
+      [nextPOIId, topicId, poi_title || 'New POI', poi_content || '', XCoord || 0, YCoord || 0]
     );
     
     const newPOI = await executeQuery(
-      'SELECT * FROM poi WHERE POIID = ?',
+      'SELECT * FROM poi WHERE id = ?',
       [nextPOIId]
     );
     
@@ -1151,6 +1208,7 @@ app.post('/api/topics/:id/pois', async (req, res) => {
       success: true, 
       data: { 
         ...newPOI[0], 
+        POIID: newPOI[0].id, // Add compatibility field
         cards: [] 
       } 
     });
@@ -1164,29 +1222,34 @@ app.post('/api/topics/:id/pois', async (req, res) => {
 app.put('/api/pois/:id', async (req, res) => {
   try {
     const poiId = req.params.id;
-    const { XCoord, YCoord, pImage, pLocation } = req.body;
+    const { XCoord, YCoord, pImage, pLocation, poi_title, poi_content } = req.body;
     
     const updateFields = [];
     const updateValues = [];
     
     if (XCoord !== undefined) {
-      updateFields.push('XCoord = ?');
+      updateFields.push('x_coordinate = ?');
       updateValues.push(XCoord);
     }
     
     if (YCoord !== undefined) {
-      updateFields.push('YCoord = ?');
+      updateFields.push('y_coordinate = ?');
       updateValues.push(YCoord);
-    }
-    
-    if (pImage !== undefined) {
-      updateFields.push('pImage = ?');
-      updateValues.push(pImage);
     }
     
     if (pLocation !== undefined) {
       updateFields.push('pLocation = ?');
       updateValues.push(pLocation);
+    }
+    
+    if (poi_title !== undefined) {
+      updateFields.push('poi_title = ?');
+      updateValues.push(poi_title);
+    }
+    
+    if (poi_content !== undefined) {
+      updateFields.push('poi_content = ?');
+      updateValues.push(poi_content);
     }
     
     if (updateFields.length === 0) {
@@ -1196,7 +1259,7 @@ app.put('/api/pois/:id', async (req, res) => {
     updateValues.push(poiId);
     
     const result = await executeQuery(
-      `UPDATE poi SET ${updateFields.join(', ')} WHERE POIID = ?`,
+      `UPDATE poi SET ${updateFields.join(', ')} WHERE id = ?`,
       updateValues
     );
     
@@ -1204,7 +1267,7 @@ app.put('/api/pois/:id', async (req, res) => {
       return res.status(404).json({ success: false, message: 'POI not found' });
     }
     
-    const updatedPOI = await executeQuery('SELECT * FROM poi WHERE POIID = ?', [poiId]);
+    const updatedPOI = await executeQuery('SELECT *, id as POIID, topic_id as TopicID_FK, x_coordinate as XCoord, y_coordinate as YCoord FROM poi WHERE id = ?', [poiId]);
     res.json({ success: true, data: updatedPOI[0] });
   } catch (error) {
     console.error('Error updating POI:', error);
@@ -1218,10 +1281,10 @@ app.delete('/api/pois/:id', async (req, res) => {
     const poiId = req.params.id;
     
     // First delete all cards for this POI
-    await executeQuery('DELETE FROM card WHERE POIID_FK = ?', [poiId]);
+    await executeQuery('DELETE FROM card WHERE poi_id = ?', [poiId]);
     
     // Then delete the POI
-    const result = await executeQuery('DELETE FROM poi WHERE POIID = ?', [poiId]);
+    const result = await executeQuery('DELETE FROM poi WHERE id = ?', [poiId]);
     
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: 'POI not found' });
@@ -1238,22 +1301,26 @@ app.delete('/api/pois/:id', async (req, res) => {
 app.post('/api/pois/:id/cards', async (req, res) => {
   try {
     const poiId = req.params.id;
-    const { Title, Body, Type, Notes, References } = req.body;
+    const { Title, Body, Type, Notes, References, card_title, card_content, card_order } = req.body;
     
-    if (!Title) {
+    const title = card_title || Title || 'New Card';
+    const content = card_content || Body || '';
+    const order = card_order || 0;
+    
+    if (!title) {
       return res.status(400).json({ success: false, message: 'Card title is required' });
     }
     
-    // Get next available CardID
-    const nextCardId = await getNextAvailableId('card', 'CardID');
+    // Get next available Card ID
+    const nextCardId = await getNextAvailableId('card', 'id');
     
     const result = await executeQuery(
-      'INSERT INTO card (CardID, Title, Body, Type, POIID_FK, Notes, `References`) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [nextCardId, Title, Body || '', Type || 1, poiId, Notes || '', References || '']
+      'INSERT INTO card (id, poi_id, card_title, card_content, card_order) VALUES (?, ?, ?, ?, ?)',
+      [nextCardId, poiId, title, content, order]
     );
     
     const newCard = await executeQuery(
-      'SELECT * FROM card WHERE CardID = ?',
+      'SELECT *, id as CardID, poi_id as POIID_FK, card_title as Title, card_content as Body FROM card WHERE id = ?',
       [nextCardId]
     );
     
@@ -1268,34 +1335,24 @@ app.post('/api/pois/:id/cards', async (req, res) => {
 app.put('/api/cards/:id', async (req, res) => {
   try {
     const cardId = req.params.id;
-    const { Title, Body, Type, Notes, References } = req.body;
+    const { Title, Body, Type, Notes, References, card_title, card_content, card_order } = req.body;
     
     const updateFields = [];
     const updateValues = [];
     
-    if (Title !== undefined) {
-      updateFields.push('Title = ?');
-      updateValues.push(Title);
+    if (card_title || Title) {
+      updateFields.push('card_title = ?');
+      updateValues.push(card_title || Title);
     }
     
-    if (Body !== undefined) {
-      updateFields.push('Body = ?');
-      updateValues.push(Body);
+    if (card_content !== undefined || Body !== undefined) {
+      updateFields.push('card_content = ?');
+      updateValues.push(card_content !== undefined ? card_content : Body);
     }
     
-    if (Type !== undefined) {
-      updateFields.push('Type = ?');
-      updateValues.push(Type);
-    }
-    
-    if (Notes !== undefined) {
-      updateFields.push('Notes = ?');
-      updateValues.push(Notes);
-    }
-    
-    if (References !== undefined) {
-      updateFields.push('`References` = ?');
-      updateValues.push(References);
+    if (card_order !== undefined) {
+      updateFields.push('card_order = ?');
+      updateValues.push(card_order);
     }
     
     if (updateFields.length === 0) {
@@ -1305,7 +1362,7 @@ app.put('/api/cards/:id', async (req, res) => {
     updateValues.push(cardId);
     
     const result = await executeQuery(
-      `UPDATE card SET ${updateFields.join(', ')} WHERE CardID = ?`,
+      `UPDATE card SET ${updateFields.join(', ')} WHERE id = ?`,
       updateValues
     );
     
@@ -1313,7 +1370,7 @@ app.put('/api/cards/:id', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Card not found' });
     }
     
-    const updatedCard = await executeQuery('SELECT * FROM card WHERE CardID = ?', [cardId]);
+    const updatedCard = await executeQuery('SELECT *, id as CardID, poi_id as POIID_FK, card_title as Title, card_content as Body FROM card WHERE id = ?', [cardId]);
     res.json({ success: true, data: updatedCard[0] });
   } catch (error) {
     console.error('Error updating card:', error);
@@ -1326,7 +1383,7 @@ app.delete('/api/cards/:id', async (req, res) => {
   try {
     const cardId = req.params.id;
     
-    const result = await executeQuery('DELETE FROM card WHERE CardID = ?', [cardId]);
+    const result = await executeQuery('DELETE FROM card WHERE id = ?', [cardId]);
     
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: 'Card not found' });

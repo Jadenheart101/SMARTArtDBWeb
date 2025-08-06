@@ -530,6 +530,31 @@ document.head.appendChild(style);
 let konamiCode = [38, 38, 40, 40, 37, 39, 37, 39, 66, 65];
 let konamiIndex = 0;
 
+// Close all modals function
+function closeAllModals() {
+    const modalSelectors = [
+        'authModal',
+        'createArtworkModal', 
+        'createProjectModal',
+        'editProjectModal',
+        'viewProjectModal',
+        'addArtInfoModal',
+        'uploadModal',
+        'mediaPreviewModal',
+        'renameModal'
+    ];
+    
+    modalSelectors.forEach(modalId => {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    });
+    
+    // Reset body overflow
+    document.body.style.overflow = 'auto';
+}
+
 document.addEventListener('keydown', (e) => {
     if (e.keyCode === konamiCode[konamiIndex]) {
         konamiIndex++;
@@ -549,6 +574,9 @@ document.addEventListener('keydown', (e) => {
 // Initialize page (called after components are loaded)
 function initializeApp() {
     console.log('SMARTArt Database Website Loaded');
+    
+    // Ensure all modals are hidden on page load
+    closeAllModals();
     
     // Add global error handler
     window.addEventListener('error', function(event) {
@@ -779,11 +807,7 @@ function setupEventListeners() {
                 showNotification('Account created successfully!', 'success');
                 
                 // Auto-login after successful signup
-                const newUser = {
-                    UserID: result.insertId || Date.now(), // Use insertId if available
-                    UserName: signupData.UserName,
-                    isAdmin: signupData.isAdmin
-                };
+                const newUser = result.data; // Use the user data returned from the backend
                 
                 localStorage.setItem('currentUser', JSON.stringify({
                     id: newUser.UserID,
@@ -1198,6 +1222,12 @@ function showDashboard() {
     const dashboardPlaceholder = document.getElementById('dashboard-placeholder');
     const websiteContent = document.getElementById('website-content');
     const mainNavbar = document.querySelector('.navbar');
+    
+    // Ensure all modals are closed when showing dashboard
+    const mediaPreviewModal = document.getElementById('mediaPreviewModal');
+    if (mediaPreviewModal) {
+        mediaPreviewModal.style.display = 'none';
+    }
     
     if (dashboardPlaceholder && websiteContent) {
         dashboardPlaceholder.style.display = 'block';
@@ -1682,14 +1712,34 @@ async function handleCreateArtwork(event) {
     const formData = new FormData(event.target);
     const currentUser = JSON.parse(localStorage.getItem('currentUser'));
     
+    if (!currentUser || !currentUser.username) {
+        showNotification('Please log in to create artwork', 'error');
+        return;
+    }
+    
+    const artName = formData.get('artworkName');
+    const artistName = formData.get('artistName');
+    
+    if (!artName || artName.trim() === '') {
+        showNotification('Artwork name is required', 'error');
+        return;
+    }
+    
+    if (!artistName || artistName.trim() === '') {
+        showNotification('Artist name is required', 'error');
+        return;
+    }
+    
     const artworkData = {
-        ArtName: formData.get('artworkName'),
-        ArtistName: formData.get('artistName'),
+        ArtName: artName.trim(),
+        ArtistName: artistName.trim(),
         Submitor: currentUser.username,
-        Date: formData.get('artworkDate'),
+        Date: formData.get('artworkDate') || new Date().toISOString().split('T')[0],
         ArtMedia: 1, // Default media type
         artcol: formData.get('artworkDescription') || ''
     };
+    
+    console.log('Creating artwork with data:', artworkData);
     
     try {
         const response = await fetch(`${API_BASE_URL}/art`, {
@@ -1700,7 +1750,17 @@ async function handleCreateArtwork(event) {
             body: JSON.stringify(artworkData)
         });
         
+        console.log('Artwork creation response status:', response.status);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Artwork creation failed with status:', response.status, errorText);
+            showNotification(`Failed to create artwork: ${response.status}`, 'error');
+            return;
+        }
+        
         const result = await response.json();
+        console.log('Artwork creation result:', result);
         
         if (result.success) {
             showNotification('Artwork created successfully!', 'success');
@@ -1711,7 +1771,7 @@ async function handleCreateArtwork(event) {
         }
     } catch (error) {
         console.error('Create artwork error:', error);
-        showNotification('Failed to create artwork', 'error');
+        showNotification('Failed to create artwork: Network error', 'error');
     }
 }
 
@@ -1723,14 +1783,29 @@ async function handleCreateProject(event) {
     
     // Get current user from localStorage
     const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    
+    if (!currentUser || !currentUser.id) {
+        showNotification('Please log in to create projects', 'error');
+        return;
+    }
+    
+    const projectName = formData.get('projectName');
+    if (!projectName || projectName.trim() === '') {
+        showNotification('Project name is required', 'error');
+        return;
+    }
+    
     const projectData = {
-        ProjectName: formData.get('projectName'),
+        ProjectName: projectName.trim(),
+        Description: formData.get('projectDescription') || null,
         Approved: 0,
         NeedsReview: 1,
-        user_id: currentUser && currentUser.id ? currentUser.id : null,
+        user_id: currentUser.id,
         DateCreated: new Date().toISOString().split('T')[0],
         DateModified: new Date().toISOString().split('T')[0]
     };
+    
+    console.log('Creating project with data:', projectData);
     
     try {
         const response = await fetch(`${API_BASE_URL}/projects`, {
@@ -1741,7 +1816,17 @@ async function handleCreateProject(event) {
             body: JSON.stringify(projectData)
         });
         
+        console.log('Project creation response status:', response.status);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Project creation failed with status:', response.status, errorText);
+            showNotification(`Failed to create project: ${response.status}`, 'error');
+            return;
+        }
+        
         const result = await response.json();
+        console.log('Project creation result:', result);
         
         if (result.success) {
             showNotification('Project created successfully!', 'success');
@@ -1752,7 +1837,7 @@ async function handleCreateProject(event) {
         }
     } catch (error) {
         console.error('Create project error:', error);
-        showNotification('Failed to create project', 'error');
+        showNotification('Failed to create project: Network error', 'error');
     }
 }
 
@@ -1928,6 +2013,14 @@ async function refreshMediaGallery() {
         if (result.success) {
             displayMediaFiles(result.files);
             updateMediaStats(result.files);
+            
+            // Ensure media preview modal remains closed after loading media
+            const mediaPreviewModal = document.getElementById('mediaPreviewModal');
+            if (mediaPreviewModal && mediaPreviewModal.style.display === 'block') {
+                console.log('Force closing media preview modal after gallery refresh');
+                mediaPreviewModal.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            }
         } else {
             gallery.innerHTML = '<div class="media-loading">Failed to load media files</div>';
         }
@@ -1937,9 +2030,35 @@ async function refreshMediaGallery() {
     }
 }
 
+// Global variable to store media files for safe preview access
+let mediaFilesCache = [];
+
+// Safe preview function that avoids string escaping issues
+function previewMediaSafe(fileId) {
+    console.log('previewMediaSafe called with fileId:', fileId);
+    
+    // Find the file in the cached media files
+    const file = mediaFilesCache.find(f => f.id === fileId);
+    if (!file) {
+        console.error('File not found in cache:', fileId);
+        showNotification('File not found', 'error');
+        return;
+    }
+    
+    const fileName = file.displayName || file.originalName || file.name;
+    const fileSize = formatFileSize(file.size || 0);
+    const createdDate = file.createdAt ? new Date(file.createdAt).toLocaleDateString() : 'Unknown';
+    
+    // Call the original preview function with safe data
+    previewMedia(fileId, file.mimeType, file.url, fileName, fileSize, createdDate);
+}
+
 // Display media files in gallery
 function displayMediaFiles(files) {
     console.log('displayMediaFiles called with:', files);
+    
+    // Cache the files for safe preview access
+    mediaFilesCache = files || [];
     
     const gallery = document.getElementById('media-gallery');
     
@@ -1992,7 +2111,7 @@ function displayMediaFiles(files) {
         });
 
         return `
-            <div class="media-item" onclick="console.log('Media item clicked!'); previewMedia('${file.id}', '${file.mimeType}', '${file.url}', '${fileName.replace(/'/g, "\\'")}', '${fileSize}', '${createdDate}')">
+            <div class="media-item" onclick="console.log('Media item clicked!'); previewMediaSafe('${file.id}')">
                 <div class="media-thumbnail">
                     ${thumbnail}
                     <div class="media-type-badge">${typeBadge}</div>
@@ -2019,16 +2138,42 @@ function displayMediaFiles(files) {
                     </div>
                 </div>
                 <div class="media-actions-overlay">
-                    <button class="media-action-btn" onclick="event.stopPropagation(); quickRename('${file.id}', '${fileName}')" title="Rename">
+                    <button class="media-action-btn" onclick="event.stopPropagation(); quickRenameSafe('${file.id}')" title="Rename">
                         <i class="fas fa-edit"></i>
                     </button>
-                    <button class="media-action-btn delete-btn" onclick="event.stopPropagation(); quickDelete('${file.id}', '${fileName}')" title="Delete">
+                    <button class="media-action-btn delete-btn" onclick="event.stopPropagation(); quickDeleteSafe('${file.id}')" title="Delete">
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
             </div>
         `;
     }).join('');
+}
+
+// Safe rename function that avoids string escaping issues
+function quickRenameSafe(fileId) {
+    const file = mediaFilesCache.find(f => f.id === fileId);
+    if (!file) {
+        console.error('File not found for rename:', fileId);
+        showNotification('File not found', 'error');
+        return;
+    }
+    
+    const currentDisplayName = file.displayName || file.originalName || file.name;
+    quickRename(fileId, currentDisplayName);
+}
+
+// Safe delete function that avoids string escaping issues
+function quickDeleteSafe(fileId) {
+    const file = mediaFilesCache.find(f => f.id === fileId);
+    if (!file) {
+        console.error('File not found for delete:', fileId);
+        showNotification('File not found', 'error');
+        return;
+    }
+    
+    const displayName = file.displayName || file.originalName || file.name;
+    quickDelete(fileId, displayName);
 }
 
 // Quick rename function for media library
@@ -2145,6 +2290,13 @@ function formatFileSize(bytes) {
 function previewMedia(fileId, mimeType, fileUrl, fileName, fileSize, uploadDate) {
     console.log('previewMedia called with:', { fileId, mimeType, fileUrl, fileName, fileSize, uploadDate });
     
+    // Add defensive checks for required parameters
+    if (!fileId || !mimeType || !fileUrl || !fileName) {
+        console.error('previewMedia called with missing required parameters');
+        showNotification('Error: Cannot preview media - missing file information', 'error');
+        return;
+    }
+    
     currentMediaFile = { fileId, mimeType, fileUrl, fileName, fileSize, uploadDate };
     
     const modal = document.getElementById('mediaPreviewModal');
@@ -2156,6 +2308,7 @@ function previewMedia(fileId, mimeType, fileUrl, fileName, fileSize, uploadDate)
     
     if (!modal || !container) {
         console.error('Modal or container not found');
+        showNotification('Error: Media preview modal not found', 'error');
         return;
     }
     
@@ -2290,6 +2443,12 @@ async function deleteCurrentMedia() {
 
 // Initialize media management when dashboard loads
 async function initializeMediaManagement() {
+    // Ensure media preview modal is closed on initialization
+    const mediaPreviewModal = document.getElementById('mediaPreviewModal');
+    if (mediaPreviewModal) {
+        mediaPreviewModal.style.display = 'none';
+    }
+    
     // Set up upload form handler
     const uploadForm = document.getElementById('uploadForm');
     if (uploadForm) {
