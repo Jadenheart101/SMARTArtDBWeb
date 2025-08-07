@@ -1259,6 +1259,51 @@ function hideDashboard() {
     }
 }
 
+function initializeDashboardEventListeners() {
+    console.log('🔧 Initializing dashboard event listeners...');
+    
+    // Set up art info form event listener
+    const addArtInfoForm = document.getElementById('addArtInfoForm');
+    if (addArtInfoForm) {
+        console.log('✅ Found addArtInfoForm, setting up event listeners');
+        
+        // Remove any existing event listeners to prevent duplicates
+        addArtInfoForm.removeEventListener('submit', handleArtInfoFormSubmit);
+        
+        // Add the form submit event listener
+        addArtInfoForm.addEventListener('submit', handleArtInfoFormSubmit);
+        
+        // Also add a click listener to the submit button as backup
+        const submitButton = addArtInfoForm.querySelector('button[type="submit"]');
+        if (submitButton) {
+            console.log('✅ Adding click listener to submit button as backup');
+            submitButton.removeEventListener('click', handleArtInfoButtonClick);
+            submitButton.addEventListener('click', handleArtInfoButtonClick);
+        }
+        
+        console.log('🎯 Art info form event listeners attached successfully');
+    } else {
+        console.warn('❌ addArtInfoForm not found in DOM');
+    }
+    
+    // Set up any other dashboard-specific event listeners here
+    // ...
+}
+
+// Art info form submit handler
+function handleArtInfoFormSubmit(e) {
+    console.log('🎯 Art info form submit event triggered!');
+    e.preventDefault();
+    submitArtInfo();
+}
+
+// Art info button click handler
+function handleArtInfoButtonClick(e) {
+    console.log('🎯 Art info submit button clicked!');
+    e.preventDefault();
+    submitArtInfo();
+}
+
 async function loadDashboardData() {
     const currentUser = JSON.parse(localStorage.getItem('currentUser'));
     if (!currentUser) return;
@@ -1279,6 +1324,9 @@ async function loadDashboardData() {
     if (userSinceElement) {
         userSinceElement.textContent = new Date().toLocaleDateString();
     }
+    
+    // Initialize dashboard event listeners after content is loaded
+    initializeDashboardEventListeners();
     
     // Load statistics
     try {
@@ -2610,32 +2658,76 @@ function updateMetadataDisplay() {
 // Global variable to store current image for art info
 let currentArtInfoImage = null;
 
+// Test function for art info saving (for debugging)
+window.testArtInfoSaving = function() {
+    console.log('🧪 Testing art info saving...');
+    
+    // Mock the current art info image
+    currentArtInfoImage = {
+        id: 1, // Assuming media file ID 1 exists
+        src: '/uploads/test.jpg',
+        name: 'Test Image'
+    };
+    
+    // Fill the form with test data
+    const form = document.getElementById('addArtInfoForm');
+    if (form) {
+        form.querySelector('#artInfoArtistName').value = 'Test Artist';
+        form.querySelector('#artInfoArtName').value = 'Test Artwork';
+        form.querySelector('#artInfoArtMedia').value = 'Digital Art';
+        form.querySelector('#artInfoSubmitor').value = 'Test User';
+        form.querySelector('#artInfoDate').value = '2025-08-07';
+        
+        console.log('Form filled with test data');
+        
+        // Trigger submission
+        submitArtInfo();
+    } else {
+        console.error('Art info form not found');
+    }
+};
+
 // Show Add Art Info Modal
 function showAddArtInfoModal() {
+    console.log('🎨 Opening Add Art Info Modal...');
+    
     const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    console.log('Current user check:', !!currentUser);
+    
     if (!currentUser) {
+        console.error('❌ No user logged in');
         showNotification('Please log in first', 'error');
         return;
     }
 
     // Get the current selected image from edit project
     const selectedImageId = document.getElementById('editSelectedImageId').value;
+    console.log('Selected image ID:', selectedImageId);
+    
     if (!selectedImageId) {
+        console.error('❌ No image selected');
         showNotification('Please select an image first', 'error');
         return;
     }
 
     // Store current image info
+    const thumbnailImg = document.getElementById('editProjectThumbnailImg');
+    console.log('Thumbnail img element:', !!thumbnailImg);
+    console.log('Thumbnail img src:', thumbnailImg ? thumbnailImg.src : 'N/A');
+    
     currentArtInfoImage = {
         id: selectedImageId,
         // Get image info from the thumbnail
-        src: document.getElementById('editProjectThumbnailImg').src,
-        name: document.getElementById('editProjectThumbnailImg').alt || 'Project Image'
+        src: thumbnailImg ? thumbnailImg.src : '',
+        name: thumbnailImg ? (thumbnailImg.alt || 'Project Image') : 'Project Image'
     };
+    
+    console.log('Set currentArtInfoImage:', currentArtInfoImage);
 
     // Show the modal
     const modal = document.getElementById('addArtInfoModal');
     if (modal) {
+        console.log('✅ Showing modal');
         modal.style.display = 'block';
         document.body.style.overflow = 'hidden';
     }
@@ -2658,6 +2750,18 @@ function closeAddArtInfoModal() {
     // Clear form
     document.getElementById('addArtInfoForm').reset();
     currentArtInfoImage = null;
+    
+    // Reset modal title
+    const modalTitle = document.querySelector('#addArtInfoModal h2');
+    if (modalTitle) {
+        modalTitle.innerHTML = '<i class="fas fa-palette"></i> Add Art Information';
+    }
+    
+    // Clear status message
+    const statusElement = document.getElementById('artInfoExistingStatus');
+    if (statusElement) {
+        statusElement.textContent = '';
+    }
 }
 
 // Load art info preview
@@ -2698,23 +2802,78 @@ async function checkExistingArtInfo() {
         const statusElement = document.getElementById('artInfoExistingStatus');
         if (statusElement) {
             statusElement.textContent = 'Checking for existing art information...';
+            statusElement.style.color = '#6b7280';
         }
 
-        // Check if there's existing art information for this image
-        // This would require a new API endpoint or checking against the art table
-        const response = await fetch(`${API_BASE_URL}/art`);
-        const result = await response.json();
+        console.log('🔍 Checking for existing art info for media ID:', currentArtInfoImage.id);
+
+        // Use the new endpoint to check for existing art information
+        const response = await fetch(`${API_BASE_URL}/art/media/${currentArtInfoImage.id}`);
         
-        if (result.success && result.data) {
-            // Check if any existing art entries match this image
-            // For now, we'll show that no existing art info was found
+        if (response.status === 404) {
+            // No existing art info found
+            console.log('ℹ️ No existing art info found');
             if (statusElement) {
                 statusElement.textContent = 'No existing art information found. You can add new information below.';
                 statusElement.style.color = '#6b7280';
             }
+            
+            // Ensure modal title shows "Add"
+            const modalTitle = document.querySelector('#addArtInfoModal h2');
+            if (modalTitle) {
+                modalTitle.innerHTML = '<i class="fas fa-palette"></i> Add Art Information';
+            }
+            return;
+        }
+        
+        const result = await response.json();
+        
+        if (result.success && result.data) {
+            console.log('✅ Found existing art info:', result.data);
+            
+            // Populate the form with existing data
+            const form = document.getElementById('addArtInfoForm');
+            if (form) {
+                form.querySelector('#artInfoArtistName').value = result.data.ArtistName || '';
+                form.querySelector('#artInfoArtName').value = result.data.ArtName || '';
+                form.querySelector('#artInfoArtMedia').value = result.data.ArtMedia || '';
+                form.querySelector('#artInfoSubmitor').value = result.data.Submitor || '';
+                
+                // Format date for input field
+                if (result.data.Date) {
+                    const date = new Date(result.data.Date);
+                    const formattedDate = date.toISOString().split('T')[0];
+                    form.querySelector('#artInfoDate').value = formattedDate;
+                }
+                
+                console.log('📝 Form populated with existing data');
+            }
+            
+            if (statusElement) {
+                statusElement.innerHTML = `
+                    <div style="color: #059669; font-weight: 500;">
+                        ✅ Existing art information found and loaded into the form.
+                    </div>
+                    <div style="color: #6b7280; font-size: 0.875rem; margin-top: 0.25rem;">
+                        You can modify the information and save to update it.
+                    </div>
+                `;
+            }
+            
+            // Update modal title to indicate editing
+            const modalTitle = document.querySelector('#addArtInfoModal h2');
+            if (modalTitle) {
+                modalTitle.innerHTML = '<i class="fas fa-edit"></i> Edit Art Information';
+            }
+        } else {
+            // No existing data, ensure modal title shows "Add"
+            const modalTitle = document.querySelector('#addArtInfoModal h2');
+            if (modalTitle) {
+                modalTitle.innerHTML = '<i class="fas fa-palette"></i> Add Art Information';
+            }
         }
     } catch (error) {
-        console.error('Error checking existing art info:', error);
+        console.error('❌ Error checking existing art info:', error);
         const statusElement = document.getElementById('artInfoExistingStatus');
         if (statusElement) {
             statusElement.textContent = 'Could not check for existing art information.';
@@ -2725,20 +2884,29 @@ async function checkExistingArtInfo() {
 
 // Handle art info form submission
 document.addEventListener('DOMContentLoaded', function() {
-    const artInfoForm = document.getElementById('addArtInfoForm');
-    if (artInfoForm) {
-        artInfoForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            await submitArtInfo();
-        });
-    }
+    // Dashboard-specific event listeners are now set up in initializeDashboardEventListeners()
+    // when the dashboard is actually loaded and visible
+    console.log('🔧 DOM loaded - dashboard event listeners will be initialized when dashboard is shown');
 });
+
+// Test function for manual testing
+window.testSubmitArtInfo = function() {
+    console.log('🧪 Testing art info submission manually...');
+    submitArtInfo();
+};
 
 // Submit art information
 async function submitArtInfo() {
+    console.log('🎨 Starting art info submission...');
+    
     const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    console.log('Current user:', currentUser);
+    console.log('Current art info image:', currentArtInfoImage);
+    
     if (!currentUser || !currentArtInfoImage) {
-        showNotification('Missing required information', 'error');
+        const message = `Missing required information - User: ${!!currentUser}, Image: ${!!currentArtInfoImage}`;
+        console.error('❌', message);
+        showNotification(message, 'error');
         return;
     }
 
@@ -2754,15 +2922,43 @@ async function submitArtInfo() {
             artcol: currentArtInfoImage.id // Link to the media file
         };
 
+        console.log('📝 Form data prepared:', artData);
+
         // Validate required fields
         if (!artData.ArtistName || !artData.ArtName) {
-            showNotification('Artist name and art title are required', 'error');
+            const message = 'Artist name and art title are required';
+            console.error('❌ Validation failed:', message);
+            showNotification(message, 'error');
             return;
         }
 
+        console.log('📤 Checking if art info already exists...');
+        
+        // First check if there's existing art info for this media file
+        let existingArt = null;
+        try {
+            const checkResponse = await fetch(`${API_BASE_URL}/art/media/${currentArtInfoImage.id}`);
+            if (checkResponse.status === 200) {
+                const checkResult = await checkResponse.json();
+                if (checkResult.success) {
+                    existingArt = checkResult.data;
+                    console.log('📋 Found existing art info, will update:', existingArt.ArtId);
+                }
+            }
+        } catch (checkError) {
+            console.log('ℹ️ No existing art info found, will create new');
+        }
+        
+        // Choose API method and endpoint
+        const isUpdate = !!existingArt;
+        const method = isUpdate ? 'PUT' : 'POST';
+        const endpoint = isUpdate ? `${API_BASE_URL}/art/${existingArt.ArtId}` : `${API_BASE_URL}/art`;
+        
+        console.log(`📤 ${isUpdate ? 'Updating' : 'Creating'} art info via ${method} ${endpoint}`);
+        
         // Submit to API
-        const response = await fetch(`${API_BASE_URL}/art`, {
-            method: 'POST',
+        const response = await fetch(endpoint, {
+            method: method,
             headers: {
                 'Content-Type': 'application/json'
             },
@@ -2770,18 +2966,22 @@ async function submitArtInfo() {
         });
 
         const result = await response.json();
+        console.log('📥 API Response:', result);
 
         if (result.success) {
-            showNotification('Art information saved successfully!', 'success');
+            const action = existingArt ? 'updated' : 'saved';
+            console.log(`✅ Art information ${action} successfully!`);
+            showNotification(`Art information ${action} successfully!`, 'success');
             closeAddArtInfoModal();
             
             // Optionally refresh any displays that show art information
             // You could add additional logic here to update the UI
         } else {
+            console.error('❌ API returned error:', result.message);
             showNotification(result.message || 'Failed to save art information', 'error');
         }
     } catch (error) {
-        console.error('Error submitting art info:', error);
+        console.error('❌ Error submitting art info:', error);
         showNotification('Failed to save art information', 'error');
     }
 }

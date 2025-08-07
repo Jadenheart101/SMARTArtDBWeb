@@ -143,6 +143,7 @@ app.get('/api', (req, res) => {
       'DELETE /api/users/:id': 'Delete user',
       'GET /api/art': 'Get all artworks',
       'GET /api/art/:id': 'Get artwork by ID',
+      'GET /api/art/media/:mediaId': 'Get artwork by media file ID',
       'POST /api/art': 'Create new artwork',
       'PUT /api/art/:id': 'Update artwork',
       'DELETE /api/art/:id': 'Delete artwork',
@@ -301,6 +302,23 @@ app.get('/api/art', async (req, res) => {
     res.json({ success: true, data: artworks });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error fetching artworks', error: error.message });
+  }
+});
+
+// Get artwork by media file ID (artcol) - MUST come before /api/art/:id
+app.get('/api/art/media/:mediaId', async (req, res) => {
+  try {
+    const mediaId = req.params.mediaId;
+    const artwork = await executeQuery('SELECT * FROM art WHERE artcol = ?', [mediaId]);
+    
+    if (artwork.length === 0) {
+      return res.status(404).json({ success: false, message: 'No artwork found for this media file' });
+    }
+    
+    res.json({ success: true, data: artwork[0] });
+  } catch (error) {
+    console.error('Error fetching artwork by media ID:', error);
+    res.status(500).json({ success: false, message: 'Error fetching artwork', error: error.message });
   }
 });
 
