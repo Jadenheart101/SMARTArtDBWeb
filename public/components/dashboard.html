@@ -127,6 +127,54 @@
                     </div>
                 </div>
                 
+                <!-- Art Information Section -->
+                <div class="view-project-art-section">
+                    <h4><i class="fas fa-palette"></i> Art Information</h4>
+                    
+                    <!-- When art info exists -->
+                    <div id="viewProjectArtInfo" class="project-art-info" style="display: none;">
+                        <div class="art-info-grid">
+                            <div class="art-info-item">
+                                <span class="art-info-label">Artist:</span>
+                                <span id="viewArtArtistName" class="art-info-value">Unknown</span>
+                            </div>
+                            <div class="art-info-item">
+                                <span class="art-info-label">Title:</span>
+                                <span id="viewArtArtName" class="art-info-value">Unknown</span>
+                            </div>
+                            <div class="art-info-item">
+                                <span class="art-info-label">Medium:</span>
+                                <span id="viewArtArtMedia" class="art-info-value">Unknown</span>
+                            </div>
+                            <div class="art-info-item">
+                                <span class="art-info-label">Submitter:</span>
+                                <span id="viewArtSubmitor" class="art-info-value">Unknown</span>
+                            </div>
+                            <div class="art-info-item">
+                                <span class="art-info-label">Date:</span>
+                                <span id="viewArtDate" class="art-info-value">Unknown</span>
+                            </div>
+                        </div>
+                        <div class="art-info-actions">
+                            <button class="btn btn-sm btn-secondary" onclick="editProjectArtInfo()">
+                                <i class="fas fa-edit"></i> Edit Art Info
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- When no art info -->
+                    <div id="viewProjectNoArtInfo" class="no-art-info-display">
+                        <div class="no-art-info-placeholder">
+                            <i class="fas fa-palette"></i>
+                            <p>No art information available</p>
+                            <small>Add art information to provide details about this artwork</small>
+                        </div>
+                        <button class="btn btn-sm btn-primary" onclick="addArtInfoForProject()">
+                            <i class="fas fa-plus"></i> Add Art Info
+                        </button>
+                    </div>
+                </div>
+                
                 <!-- Topics Section -->
                 <div class="view-project-topics-section">
                     <div class="topics-header">

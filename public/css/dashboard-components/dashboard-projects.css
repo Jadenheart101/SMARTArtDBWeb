@@ -609,6 +609,92 @@
     border-top: 1px solid var(--border-color, #e0e0e0);
 }
 
+/* Art Information Section */
+.view-project-art-section {
+    margin-top: 2rem;
+}
+
+.view-project-art-section h4 {
+    margin-bottom: 1rem;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary, #1f2937);
+}
+
+.view-project-art-section h4 i {
+    color: var(--primary-color, #8b5cf6);
+    margin-right: 0.5rem;
+    width: 1.25rem;
+}
+
+.project-art-info {
+    background: var(--bg-secondary, #f9fafb);
+    border: 1px solid var(--border-color, #e5e7eb);
+    border-radius: 8px;
+    padding: 1.5rem;
+}
+
+.art-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.art-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.art-info-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary, #6b7280);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.art-info-value {
+    font-size: 1rem;
+    color: var(--text-primary, #1f2937);
+    font-weight: 400;
+}
+
+.art-info-actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color, #e5e7eb);
+}
+
+.no-art-info-display {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-secondary, #6b7280);
+}
+
+.no-art-info-placeholder {
+    margin-bottom: 1rem;
+}
+
+.no-art-info-placeholder i {
+    font-size: 2rem;
+    color: var(--text-tertiary, #9ca3af);
+    margin-bottom: 0.5rem;
+}
+
+.no-art-info-placeholder p {
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+}
+
+.no-art-info-placeholder small {
+    font-size: 0.875rem;
+    color: var(--text-tertiary, #9ca3af);
+}
+
 .project-status {
     padding: 0.25rem 0.75rem;
     border-radius: 20px;

@@ -977,6 +977,9 @@ async function viewProject(projectID) {
             // Load project topics
             await loadProjectTopics(projectID);
             
+            // Load art information if project has an image
+            await loadProjectArtInfo(project);
+            
         } else {
             showNotification('Failed to load project details', 'error');
         }
@@ -992,6 +995,130 @@ function closeViewProjectModal() {
     if (modal) {
         modal.style.display = 'none';
         document.body.style.overflow = 'auto';
+    }
+}
+
+// Function to load art information for a project
+async function loadProjectArtInfo(project) {
+    console.log('🎨 loadProjectArtInfo called with project:', project);
+    
+    const artInfoContainer = document.getElementById('viewProjectArtInfo');
+    const noArtInfoContainer = document.getElementById('viewProjectNoArtInfo');
+    
+    console.log('Art info containers found:', { 
+        artInfoContainer: !!artInfoContainer, 
+        noArtInfoContainer: !!noArtInfoContainer 
+    });
+    
+    if (!artInfoContainer || !noArtInfoContainer) {
+        console.warn('❌ Art info containers not found in DOM');
+        return;
+    }
+    
+    // Hide both containers initially
+    artInfoContainer.style.display = 'none';
+    noArtInfoContainer.style.display = 'block';
+    
+    // Check if project has an image URL
+    if (!project.ImageURL || project.ImageURL.trim() === '') {
+        console.log('ℹ️ No image URL for project, skipping art info');
+        return;
+    }
+    
+    try {
+        // Extract media filename from the URL
+        // ImageURL format is typically like: /uploads/user_anonymous/images/filename.jpg
+        const urlParts = project.ImageURL.split('/');
+        const filename = urlParts[urlParts.length - 1];
+        
+        console.log('🔍 URL parts:', urlParts);
+        console.log('📁 Extracted filename:', filename);
+        
+        if (!filename) {
+            console.log('❌ Could not extract filename from ImageURL:', project.ImageURL);
+            return;
+        }
+        
+        console.log('🔎 Looking for art info for media:', filename);
+        
+        // Fetch art information using the media filename
+        const apiUrl = `${API_BASE_URL}/art/media/${encodeURIComponent(filename)}`;
+        console.log('🌐 API URL:', apiUrl);
+        
+        const response = await fetch(apiUrl);
+        console.log('📡 Response status:', response.status);
+        
+        const result = await response.json();
+        console.log('📦 API result:', result);
+        
+        if (result.success && result.data) {
+            console.log('✅ Art info found:', result.data);
+            
+            // Show art info container and hide no-info container
+            artInfoContainer.style.display = 'block';
+            noArtInfoContainer.style.display = 'none';
+            
+            // Populate art information
+            const artInfo = result.data;
+            
+            const elements = {
+                artistName: document.getElementById('viewArtArtistName'),
+                artName: document.getElementById('viewArtArtName'),
+                artMedia: document.getElementById('viewArtArtMedia'),
+                submitor: document.getElementById('viewArtSubmitor'),
+                date: document.getElementById('viewArtDate')
+            };
+            
+            console.log('🎯 Art info elements found:', Object.fromEntries(
+                Object.entries(elements).map(([key, el]) => [key, !!el])
+            ));
+            
+            if (elements.artistName) elements.artistName.textContent = artInfo.ArtistName || 'Unknown';
+            if (elements.artName) elements.artName.textContent = artInfo.ArtName || 'Unknown';
+            if (elements.artMedia) elements.artMedia.textContent = artInfo.ArtMedia || 'Unknown';
+            if (elements.submitor) elements.submitor.textContent = artInfo.Submitor || 'Unknown';
+            
+            // Format the date if available
+            if (elements.date) {
+                if (artInfo.Date) {
+                    const date = new Date(artInfo.Date);
+                    elements.date.textContent = date.toLocaleDateString();
+                } else {
+                    elements.date.textContent = 'Unknown';
+                }
+            }
+            
+            // Store the art ID and media filename for editing
+            window.currentProjectArtId = artInfo.ArtId;
+            window.currentProjectMediaFile = filename;
+            
+            console.log('🎉 Art info successfully displayed!');
+            
+        } else {
+            console.log('ℹ️ No art info found for media:', filename, 'API result:', result);
+            // Keep showing the no-art-info container with the option to add
+            window.currentProjectMediaFile = filename;
+        }
+        
+    } catch (error) {
+        console.error('❌ Error loading art info:', error);
+        // Keep showing the no-art-info container
+    }
+}
+
+// Function to handle editing art info from project view
+function editProjectArtInfo() {
+    if (window.currentProjectMediaFile) {
+        showAddArtInfoModal(window.currentProjectMediaFile);
+        closeViewProjectModal();
+    }
+}
+
+// Function to handle adding art info from project view
+function addArtInfoForProject() {
+    if (window.currentProjectMediaFile) {
+        showAddArtInfoModal(window.currentProjectMediaFile);
+        closeViewProjectModal();
     }
 }
 
@@ -1060,9 +1187,16 @@ async function editProject(projectID) {
             // Populate description if available
             const descInput = document.getElementById('editProjectDescription');
             if (descInput) descInput.value = project.Description || '';
-            // Populate image ID if available
+            
+            // Populate image filename (not ImageID) for art info consistency
             const imgInput = document.getElementById('editSelectedImageId');
-            if (imgInput && project.ImageID) imgInput.value = project.ImageID;
+            if (imgInput && project.ImageURL) {
+                // Extract filename from ImageURL for consistent art info lookup
+                const urlParts = project.ImageURL.split('/');
+                const filename = urlParts[urlParts.length - 1];
+                imgInput.value = filename;
+                console.log('🖼️ Set editSelectedImageId to filename:', filename, 'instead of ImageID:', project.ImageID);
+            }
             
             // Show/hide image selection based on whether project has an image
             const thumbnail = document.getElementById('editProjectImageThumbnail');
@@ -1191,10 +1325,24 @@ async function loadEditImageGallery() {
 
 // Select image for project
 function selectEditImage(imageId, imageUrl, imageName) {
-    // Set the hidden input value
+    console.log('🖼️ selectEditImage called with:', { imageId, imageUrl, imageName });
+    
+    // Extract filename from imageName or imageUrl
+    let filename = imageName;
+    
+    // If imageName doesn't look like a filename (no extension), try to extract from URL
+    if (!filename || !filename.includes('.')) {
+        const urlParts = imageUrl.split('/');
+        filename = urlParts[urlParts.length - 1];
+    }
+    
+    console.log('📁 Using filename for art info lookup:', filename);
+    
+    // Set the hidden input value to the filename (not imageId)
     const hiddenInput = document.getElementById('editSelectedImageId');
     if (hiddenInput) {
-        hiddenInput.value = imageId;
+        hiddenInput.value = filename;  // Use filename instead of imageId
+        console.log('✅ Set editSelectedImageId to:', filename);
     }
     
     // Show thumbnail
@@ -2688,8 +2836,9 @@ window.testArtInfoSaving = function() {
 };
 
 // Show Add Art Info Modal
-function showAddArtInfoModal() {
+function showAddArtInfoModal(mediaFilename = null) {
     console.log('🎨 Opening Add Art Info Modal...');
+    console.log('Media filename parameter:', mediaFilename);
     
     const currentUser = JSON.parse(localStorage.getItem('currentUser'));
     console.log('Current user check:', !!currentUser);
@@ -2700,28 +2849,41 @@ function showAddArtInfoModal() {
         return;
     }
 
-    // Get the current selected image from edit project
-    const selectedImageId = document.getElementById('editSelectedImageId').value;
-    console.log('Selected image ID:', selectedImageId);
+    let imageInfo = null;
     
-    if (!selectedImageId) {
-        console.error('❌ No image selected');
-        showNotification('Please select an image first', 'error');
-        return;
+    if (mediaFilename) {
+        // Called from project view - use the media filename
+        console.log('Using media filename from project view:', mediaFilename);
+        imageInfo = {
+            id: mediaFilename,
+            src: `/media/user_${currentUser.username}/images/${mediaFilename}`,
+            name: mediaFilename
+        };
+    } else {
+        // Called from edit project - get the current selected image
+        const selectedImageId = document.getElementById('editSelectedImageId').value;
+        console.log('Selected image ID:', selectedImageId);
+        
+        if (!selectedImageId) {
+            console.error('❌ No image selected');
+            showNotification('Please select an image first', 'error');
+            return;
+        }
+        
+        // Store current image info
+        const thumbnailImg = document.getElementById('editProjectThumbnailImg');
+        console.log('Thumbnail img element:', !!thumbnailImg);
+        console.log('Thumbnail img src:', thumbnailImg ? thumbnailImg.src : 'N/A');
+        
+        imageInfo = {
+            id: selectedImageId,
+            // Get image info from the thumbnail
+            src: thumbnailImg ? thumbnailImg.src : '',
+            name: thumbnailImg ? (thumbnailImg.alt || 'Project Image') : 'Project Image'
+        };
     }
-
-    // Store current image info
-    const thumbnailImg = document.getElementById('editProjectThumbnailImg');
-    console.log('Thumbnail img element:', !!thumbnailImg);
-    console.log('Thumbnail img src:', thumbnailImg ? thumbnailImg.src : 'N/A');
     
-    currentArtInfoImage = {
-        id: selectedImageId,
-        // Get image info from the thumbnail
-        src: thumbnailImg ? thumbnailImg.src : '',
-        name: thumbnailImg ? (thumbnailImg.alt || 'Project Image') : 'Project Image'
-    };
-    
+    currentArtInfoImage = imageInfo;
     console.log('Set currentArtInfoImage:', currentArtInfoImage);
 
     // Show the modal
@@ -2796,7 +2958,12 @@ async function loadArtInfoPreview() {
 
 // Check for existing art information
 async function checkExistingArtInfo() {
-    if (!currentArtInfoImage) return;
+    if (!currentArtInfoImage) {
+        console.log('❌ No currentArtInfoImage available');
+        return;
+    }
+
+    console.log('🔍 checkExistingArtInfo called with currentArtInfoImage:', currentArtInfoImage);
 
     try {
         const statusElement = document.getElementById('artInfoExistingStatus');
@@ -2806,13 +2973,15 @@ async function checkExistingArtInfo() {
         }
 
         console.log('🔍 Checking for existing art info for media ID:', currentArtInfoImage.id);
+        console.log('🌐 API endpoint will be:', `${API_BASE_URL}/art/media/${currentArtInfoImage.id}`);
 
         // Use the new endpoint to check for existing art information
         const response = await fetch(`${API_BASE_URL}/art/media/${currentArtInfoImage.id}`);
+        console.log('📡 checkExistingArtInfo response status:', response.status);
         
         if (response.status === 404) {
             // No existing art info found
-            console.log('ℹ️ No existing art info found');
+            console.log('ℹ️ No existing art info found in checkExistingArtInfo');
             if (statusElement) {
                 statusElement.textContent = 'No existing art information found. You can add new information below.';
                 statusElement.style.color = '#6b7280';
@@ -2827,9 +2996,10 @@ async function checkExistingArtInfo() {
         }
         
         const result = await response.json();
+        console.log('📦 checkExistingArtInfo API result:', result);
         
         if (result.success && result.data) {
-            console.log('✅ Found existing art info:', result.data);
+            console.log('✅ Found existing art info in checkExistingArtInfo:', result.data);
             
             // Populate the form with existing data
             const form = document.getElementById('addArtInfoForm');
