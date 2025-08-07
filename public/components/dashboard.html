@@ -342,6 +342,63 @@
                       </div>
                   </div>
               </div>
+          </div>
+          
+          <!-- Admin Media Gallery Section - Only visible to administrators -->
+          <div class="dashboard-admin-media" id="admin-media-section" style="display: none;">
+              <div class="media-section">
+                  <div class="media-header admin-header">
+                      <h3><i class="fas fa-images"></i> All Media Files (Admin View)</h3>
+                      <div class="admin-actions">
+                          <button class="btn btn-secondary" onclick="refreshAdminMediaGallery()">
+                              <i class="fas fa-sync-alt"></i> Refresh
+                          </button>
+                          <button class="btn btn-success" id="download-all-media-btn" onclick="downloadAllMedia()">
+                              <i class="fas fa-download"></i> Download All Media
+                          </button>
+                          <span class="admin-badge">Administrator</span>
+                      </div>
+                  </div>
+                  <div class="admin-media-stats">
+                      <div class="admin-stat">
+                          <i class="fas fa-images"></i>
+                          <span>Total Files: <strong id="admin-total-media-count">0</strong></span>
+                      </div>
+                      <div class="admin-stat">
+                          <i class="fas fa-users"></i>
+                          <span>Total Users with Media: <strong id="admin-media-users-count">0</strong></span>
+                      </div>
+                      <div class="admin-stat">
+                          <i class="fas fa-hdd"></i>
+                          <span>Total Storage: <strong id="admin-total-storage">0 MB</strong></span>
+                      </div>
+                  </div>
+                  
+                  <!-- User Filter -->
+                  <div class="admin-media-filters">
+                      <div class="filter-group">
+                          <label for="userFilter">Filter by User:</label>
+                          <select id="userFilter" onchange="filterAdminMediaByUser()">
+                              <option value="">All Users</option>
+                          </select>
+                      </div>
+                      <div class="filter-group">
+                          <label for="typeFilter">Filter by Type:</label>
+                          <select id="typeFilter" onchange="filterAdminMediaByType()">
+                              <option value="">All Types</option>
+                              <option value="image">Images</option>
+                              <option value="video">Videos</option>
+                              <option value="audio">Audio</option>
+                          </select>
+                      </div>
+                  </div>
+                  
+                  <div class="admin-media-gallery" id="admin-media-gallery">
+                      <div class="media-loading">
+                          <i class="fas fa-spinner fa-spin"></i> Loading all media files...
+                      </div>
+                  </div>
+              </div>
           </div>        <!-- <div class="dashboard-recent">
             <div class="recent-section">
                 <h3>Recent Activity</h3>
@@ -518,6 +575,74 @@
             <div class="form-actions">
                 <button type="button" class="btn btn-secondary" onclick="closeRenameModal()">Cancel</button>
                 <button type="submit" class="btn btn-primary">Rename</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Replace Media Modal (Admin) -->
+<div id="replaceMediaModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeReplaceMediaModal()">&times;</span>
+        <h2><i class="fas fa-exchange-alt"></i> Replace Media File</h2>
+        
+        <div class="replace-media-info">
+            <div class="current-media-preview">
+                <h4>Current Media:</h4>
+                <div class="current-media-display">
+                    <img id="currentMediaPreview" src="" alt="Current media" style="max-width: 200px; max-height: 150px; object-fit: cover; border-radius: 8px;">
+                    <div class="current-media-details">
+                        <p><strong>File:</strong> <span id="currentMediaName">-</span></p>
+                        <p><strong>Owner:</strong> <span id="currentMediaOwner">-</span></p>
+                        <p><strong>Used in:</strong> <span id="currentMediaUsage">Checking...</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <form id="replaceMediaForm" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="replaceMediaFile">Select New Image File</label>
+                <input type="file" id="replaceMediaFile" name="file" accept="image/*" required>
+                <small>Supported formats: JPEG, PNG, GIF, BMP, WebP</small>
+            </div>
+            
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="keepOriginalName" checked> 
+                    Keep original filename
+                </label>
+                <small>If unchecked, the new file's name will be used</small>
+            </div>
+            
+            <div class="replacement-warning">
+                <div class="warning-icon">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="warning-content">
+                    <h4>Warning: Global Replacement</h4>
+                    <p>This will replace the image everywhere it's used in the system, including:</p>
+                    <ul>
+                        <li>Projects that reference this image</li>
+                        <li>Art information linked to this image</li>
+                        <li>Any cards or topics using this image</li>
+                    </ul>
+                    <p><strong>This action cannot be undone.</strong></p>
+                </div>
+            </div>
+            
+            <div class="replace-progress" id="replaceProgress" style="display: none;">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="replaceProgressFill"></div>
+                </div>
+                <div class="progress-text" id="replaceProgressText">Replacing media...</div>
+            </div>
+            
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeReplaceMediaModal()">Cancel</button>
+                <button type="submit" class="btn btn-warning" id="replaceMediaBtn">
+                    <i class="fas fa-exchange-alt"></i> Replace Media
+                </button>
             </div>
         </form>
     </div>

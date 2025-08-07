@@ -1611,11 +1611,16 @@ async function loadDashboardData() {
     // Load admin projects if user is admin
     if (currentUser.isAdmin) {
         loadAdminProjects();
+        loadAdminMediaGallery();
     } else {
-        // Hide admin section for regular users
-        const adminSection = document.getElementById('admin-projects-section');
-        if (adminSection) {
-            adminSection.style.display = 'none';
+        // Hide admin sections for regular users
+        const adminProjectsSection = document.getElementById('admin-projects-section');
+        const adminMediaSection = document.getElementById('admin-media-section');
+        if (adminProjectsSection) {
+            adminProjectsSection.style.display = 'none';
+        }
+        if (adminMediaSection) {
+            adminMediaSection.style.display = 'none';
         }
     }
     
@@ -1762,6 +1767,501 @@ async function loadAdminProjects() {
                 </div>
             `;
         }
+    }
+}
+
+// Load admin media gallery - displays all media files for all users for administrators
+async function loadAdminMediaGallery() {
+    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    if (!currentUser || !currentUser.isAdmin) return;
+    
+    const adminMediaSection = document.getElementById('admin-media-section');
+    const adminMediaGrid = document.getElementById('admin-media-gallery');
+    const totalMediaElement = document.getElementById('admin-total-media-count');
+    const totalUsersElement = document.getElementById('admin-media-users-count');
+    const totalSizeElement = document.getElementById('admin-total-storage');
+    const downloadBtn = document.getElementById('download-all-media-btn');
+    
+    // Show admin media section
+    if (adminMediaSection) {
+        adminMediaSection.style.display = 'block';
+    }
+    
+    try {
+        // Load all media using admin API endpoint
+        const response = await fetchFromAPI('/admin/media/all');
+        
+        if (response.success && response.data) {
+            const mediaData = response.data;
+            const allMedia = mediaData.media;
+            
+            // Update admin statistics
+            if (totalMediaElement) {
+                totalMediaElement.textContent = mediaData.statistics.totalMedia;
+            }
+            
+            if (totalUsersElement) {
+                totalUsersElement.textContent = mediaData.statistics.totalUsers;
+            }
+            
+            if (totalSizeElement) {
+                const sizeInMB = (mediaData.statistics.totalSize / (1024 * 1024)).toFixed(2);
+                totalSizeElement.textContent = `${sizeInMB} MB`;
+            }
+            
+            // Enable download button
+            if (downloadBtn) {
+                downloadBtn.disabled = false;
+                downloadBtn.onclick = () => downloadAllMedia();
+            }
+            
+            // Display media in admin grid
+            if (adminMediaGrid) {
+                adminMediaGrid.innerHTML = '';
+                
+                if (allMedia.length === 0) {
+                    adminMediaGrid.innerHTML = `
+                        <div class="media-empty">
+                            <div class="media-empty-icon"><i class="fas fa-images"></i></div>
+                            <h4>No Media Files Found</h4>
+                            <p>No media files exist in the system yet.</p>
+                        </div>
+                    `;
+                } else {
+                    allMedia.forEach(media => {
+                        const fileExtension = media.file_name.split('.').pop().toLowerCase();
+                        const isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(fileExtension);
+                        
+                        let mediaPreview = '';
+                        if (isImage) {
+                            mediaPreview = `
+                                <div class="media-preview">
+                                    <img src="${media.file_path}" alt="${media.file_name}" loading="lazy" class="admin-media-thumbnail" onclick="viewMedia('${media.file_path}')">
+                                </div>
+                            `;
+                        } else {
+                            mediaPreview = `
+                                <div class="media-preview media-file">
+                                    <i class="fas fa-file"></i>
+                                    <span class="file-extension">${fileExtension.toUpperCase()}</span>
+                                </div>
+                            `;
+                        }
+                        
+                        const uploadDate = new Date(media.upload_date).toLocaleDateString();
+                        const fileSize = media.file_size ? `${(media.file_size / 1024).toFixed(1)} KB` : 'Unknown';
+                        
+                        adminMediaGrid.innerHTML += `
+                            <div class="media-item" data-user-id="${media.user_id}" data-file-type="${fileExtension}">
+                                ${mediaPreview}
+                                <div class="media-info">
+                                    <h5 class="media-title">${media.file_name}</h5>
+                                    <div class="media-meta">
+                                        <div class="media-user">
+                                            <i class="fas fa-user"></i>
+                                            <span>${media.username || 'Anonymous'}</span>
+                                        </div>
+                                        <div class="media-date">
+                                            <i class="fas fa-calendar"></i>
+                                            <span>${uploadDate}</span>
+                                        </div>
+                                        <div class="media-size">
+                                            <i class="fas fa-file-alt"></i>
+                                            <span>${fileSize}</span>
+                                        </div>
+                                    </div>
+                                    <div class="media-actions">
+                                        <button class="media-btn view-btn" onclick="viewMedia('${media.file_path}')" title="View Media">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="media-btn download-btn" onclick="downloadMedia('${media.file_path}', '${media.file_name}')" title="Download">
+                                            <i class="fas fa-download"></i>
+                                        </button>
+                                        <button class="media-btn replace-btn" onclick="showReplaceMediaModal(${media.id}, '${media.file_name}', '${media.file_path}')" title="Replace Image">
+                                            <i class="fas fa-exchange-alt"></i>
+                                        </button>
+                                        <button class="media-btn delete-btn" onclick="adminDeleteMedia(${media.id}, '${media.file_name}')" title="Delete">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    // Initialize media filters
+                    initializeMediaFilters();
+                }
+            }
+        } else {
+            if (adminMediaGrid) {
+                adminMediaGrid.innerHTML = `
+                    <div class="media-error">
+                        <div class="media-error-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                        <h4>Error Loading Media</h4>
+                        <p>Failed to load admin media data. Please try again.</p>
+                        <button class="btn btn-primary" onclick="loadAdminMediaGallery()">
+                            <i class="fas fa-sync-alt"></i> Retry
+                        </button>
+                    </div>
+                `;
+            }
+        }
+        
+    } catch (error) {
+        console.error('Error loading admin media gallery:', error);
+        if (adminMediaGrid) {
+            adminMediaGrid.innerHTML = `
+                <div class="media-error">
+                    <div class="media-error-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                    <h4>Error Loading Media</h4>
+                    <p>Network error occurred. Please check your connection.</p>
+                    <button class="btn btn-primary" onclick="loadAdminMediaGallery()">
+                        <i class="fas fa-sync-alt"></i> Retry
+                    </button>
+                </div>
+            `;
+        }
+    }
+}
+
+// Refresh admin media gallery
+function refreshAdminMediaGallery() {
+    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    if (!currentUser || !currentUser.isAdmin) {
+        showNotification('Admin access required', 'error');
+        return;
+    }
+    
+    loadAdminMediaGallery();
+}
+
+// Download all media files and backup JSON
+async function downloadAllMedia() {
+    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    if (!currentUser || !currentUser.isAdmin) {
+        showNotification('Admin access required', 'error');
+        return;
+    }
+    
+    const downloadBtn = document.getElementById('download-all-media-btn');
+    const originalText = downloadBtn.innerHTML;
+    
+    try {
+        // Show loading state
+        downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing Download...';
+        downloadBtn.disabled = true;
+        
+        // Get backup data
+        const response = await fetchFromAPI('/admin/media/backup-data');
+        
+        if (response.success && response.data) {
+            // Create and download backup JSON
+            const backupData = response.data;
+            const jsonBlob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+            const jsonUrl = URL.createObjectURL(jsonBlob);
+            
+            const jsonLink = document.createElement('a');
+            jsonLink.href = jsonUrl;
+            jsonLink.download = `media-backup-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(jsonLink);
+            jsonLink.click();
+            document.body.removeChild(jsonLink);
+            URL.revokeObjectURL(jsonUrl);
+            
+            // Download each media file
+            for (const media of backupData.media) {
+                try {
+                    const mediaResponse = await fetch(media.file_path);
+                    if (mediaResponse.ok) {
+                        const blob = await mediaResponse.blob();
+                        const url = URL.createObjectURL(blob);
+                        
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = media.file_name;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        URL.revokeObjectURL(url);
+                        
+                        // Small delay to prevent overwhelming the browser
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                } catch (fileError) {
+                    console.error(`Error downloading ${media.file_name}:`, fileError);
+                }
+            }
+            
+            showNotification(`Successfully downloaded ${backupData.media.length} media files and backup JSON`, 'success');
+            
+        } else {
+            showNotification('Failed to prepare backup data', 'error');
+        }
+        
+    } catch (error) {
+        console.error('Error downloading media:', error);
+        showNotification('Error occurred during download', 'error');
+    } finally {
+        // Restore button state
+        downloadBtn.innerHTML = originalText;
+        downloadBtn.disabled = false;
+    }
+}
+
+// Initialize media filters
+function initializeMediaFilters() {
+    const userFilter = document.getElementById('media-user-filter');
+    const typeFilter = document.getElementById('media-type-filter');
+    
+    if (userFilter) {
+        userFilter.addEventListener('change', filterMedia);
+    }
+    
+    if (typeFilter) {
+        typeFilter.addEventListener('change', filterMedia);
+    }
+}
+
+// Filter media based on user and type selection
+function filterMedia() {
+    const userFilter = document.getElementById('userFilter');
+    const typeFilter = document.getElementById('typeFilter');
+    const mediaItems = document.querySelectorAll('.media-item');
+    
+    const selectedUser = userFilter ? userFilter.value : '';
+    const selectedType = typeFilter ? typeFilter.value : '';
+    
+    mediaItems.forEach(item => {
+        const userId = item.dataset.userId;
+        const fileType = item.dataset.fileType;
+        
+        let showItem = true;
+        
+        if (selectedUser && selectedUser !== userId) {
+            showItem = false;
+        }
+        
+        if (selectedType && selectedType !== fileType) {
+            showItem = false;
+        }
+        
+        item.style.display = showItem ? 'block' : 'none';
+    });
+}
+
+// Filter admin media by user (called from HTML)
+function filterAdminMediaByUser() {
+    filterMedia();
+}
+
+// Filter admin media by type (called from HTML)
+function filterAdminMediaByType() {
+    filterMedia();
+}
+
+// View media in modal or new tab
+function viewMedia(mediaPath) {
+    window.open(mediaPath, '_blank');
+}
+
+// Download individual media file
+function downloadMedia(mediaPath, fileName) {
+    const link = document.createElement('a');
+    link.href = mediaPath;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// Admin delete media file
+async function adminDeleteMedia(mediaId, fileName) {
+    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    if (!currentUser || !currentUser.isAdmin) {
+        showNotification('Admin access required', 'error');
+        return;
+    }
+    
+    if (!confirm(`Are you sure you want to delete "${fileName}"? This action cannot be undone.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetchFromAPI(`/admin/media/${mediaId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.success) {
+            showNotification('Media file deleted successfully', 'success');
+            loadAdminMediaGallery(); // Reload the gallery
+        } else {
+            showNotification(response.error || 'Failed to delete media file', 'error');
+        }
+    } catch (error) {
+        console.error('Error deleting media:', error);
+        showNotification('Error occurred while deleting media', 'error');
+    }
+}
+
+// Show replace media modal
+let currentReplaceMediaId = null;
+async function showReplaceMediaModal(mediaId, fileName, filePath) {
+    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    if (!currentUser || !currentUser.isAdmin) {
+        showNotification('Admin access required', 'error');
+        return;
+    }
+    
+    currentReplaceMediaId = mediaId;
+    
+    // Update modal with current media info
+    document.getElementById('currentMediaPreview').src = filePath;
+    document.getElementById('currentMediaName').textContent = fileName;
+    
+    // Get media usage information
+    try {
+        const response = await fetchFromAPI(`/admin/media/${mediaId}/usage`);
+        if (response.success) {
+            const usage = response.data;
+            let usageText = [];
+            
+            if (usage.projects > 0) usageText.push(`${usage.projects} project(s)`);
+            if (usage.artInfo > 0) usageText.push(`${usage.artInfo} art record(s)`);
+            if (usage.cards > 0) usageText.push(`${usage.cards} card(s)`);
+            
+            document.getElementById('currentMediaUsage').textContent = 
+                usageText.length > 0 ? usageText.join(', ') : 'Not used in any projects or art records';
+        } else {
+            document.getElementById('currentMediaUsage').textContent = 'Unable to check usage';
+        }
+    } catch (error) {
+        console.error('Error checking media usage:', error);
+        document.getElementById('currentMediaUsage').textContent = 'Error checking usage';
+    }
+    
+    // Get owner information
+    try {
+        const response = await fetchFromAPI(`/admin/media/${mediaId}`);
+        if (response.success && response.data) {
+            document.getElementById('currentMediaOwner').textContent = 
+                response.data.username || response.data.owner_name || 'Unknown';
+        }
+    } catch (error) {
+        console.error('Error getting media owner:', error);
+        document.getElementById('currentMediaOwner').textContent = 'Unknown';
+    }
+    
+    // Show modal
+    document.getElementById('replaceMediaModal').style.display = 'block';
+}
+
+// Close replace media modal
+function closeReplaceMediaModal() {
+    document.getElementById('replaceMediaModal').style.display = 'none';
+    document.getElementById('replaceMediaForm').reset();
+    currentReplaceMediaId = null;
+}
+
+// Handle replace media form submission
+document.addEventListener('DOMContentLoaded', function() {
+    const replaceForm = document.getElementById('replaceMediaForm');
+    if (replaceForm) {
+        replaceForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            await handleReplaceMedia();
+        });
+    }
+});
+
+// Replace media file
+async function handleReplaceMedia() {
+    if (!currentReplaceMediaId) {
+        showNotification('No media selected for replacement', 'error');
+        return;
+    }
+    
+    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    if (!currentUser || !currentUser.isAdmin) {
+        showNotification('Admin access required', 'error');
+        return;
+    }
+    
+    const fileInput = document.getElementById('replaceMediaFile');
+    const keepOriginalName = document.getElementById('keepOriginalName').checked;
+    const replaceBtn = document.getElementById('replaceMediaBtn');
+    const progressDiv = document.getElementById('replaceProgress');
+    const progressFill = document.getElementById('replaceProgressFill');
+    const progressText = document.getElementById('replaceProgressText');
+    
+    if (!fileInput.files[0]) {
+        showNotification('Please select a file to upload', 'error');
+        return;
+    }
+    
+    const file = fileInput.files[0];
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+        showNotification('Please select an image file', 'error');
+        return;
+    }
+    
+    try {
+        // Show progress
+        replaceBtn.disabled = true;
+        progressDiv.style.display = 'block';
+        progressText.textContent = 'Uploading new media...';
+        progressFill.style.width = '20%';
+        
+        // Create form data
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('keepOriginalName', keepOriginalName);
+        formData.append('originalMediaId', currentReplaceMediaId);
+        
+        // Upload and replace
+        const response = await fetch(`${API_BASE_URL}/admin/media/${currentReplaceMediaId}/replace`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            progressFill.style.width = '100%';
+            progressText.textContent = 'Media replacement completed!';
+            
+            showNotification('Media replaced successfully! All references have been updated.', 'success');
+            
+            // Force refresh of any cached images by adding timestamp parameter
+            const timestamp = Date.now();
+            document.querySelectorAll('img').forEach(img => {
+                if (img.src && img.src.includes(result.data.fileName)) {
+                    img.src = img.src.split('?')[0] + '?v=' + timestamp;
+                }
+            });
+            
+            // Close modal and refresh gallery
+            setTimeout(() => {
+                closeReplaceMediaModal();
+                loadAdminMediaGallery();
+            }, 1500);
+            
+        } else {
+            throw new Error(result.error || 'Failed to replace media');
+        }
+        
+    } catch (error) {
+        console.error('Error replacing media:', error);
+        showNotification(`Error replacing media: ${error.message}`, 'error');
+        
+        progressDiv.style.display = 'none';
+        replaceBtn.disabled = false;
     }
 }
 
@@ -2231,12 +2731,15 @@ let mediaFilesCache = [];
 
 // Safe preview function that avoids string escaping issues
 function previewMediaSafe(fileId) {
-    console.log('previewMediaSafe called with fileId:', fileId);
+    console.log('previewMediaSafe called with fileId:', fileId, 'type:', typeof fileId);
     
     // Find the file in the cached media files
-    const file = mediaFilesCache.find(f => f.id === fileId);
+    // Convert fileId to number for comparison since IDs in cache are numbers
+    const numericFileId = parseInt(fileId, 10);
+    const file = mediaFilesCache.find(f => f.id === numericFileId);
     if (!file) {
-        console.error('File not found in cache:', fileId);
+        console.error('File not found in cache:', fileId, 'converted to:', numericFileId);
+        console.log('Available files in cache:', mediaFilesCache.map(f => ({ id: f.id, name: f.name })));
         showNotification('File not found', 'error');
         return;
     }
@@ -2348,9 +2851,11 @@ function displayMediaFiles(files) {
 
 // Safe rename function that avoids string escaping issues
 function quickRenameSafe(fileId) {
-    const file = mediaFilesCache.find(f => f.id === fileId);
+    // Convert fileId to number for comparison since IDs in cache are numbers
+    const numericFileId = parseInt(fileId, 10);
+    const file = mediaFilesCache.find(f => f.id === numericFileId);
     if (!file) {
-        console.error('File not found for rename:', fileId);
+        console.error('File not found for rename:', fileId, 'converted to:', numericFileId);
         showNotification('File not found', 'error');
         return;
     }
@@ -2361,15 +2866,17 @@ function quickRenameSafe(fileId) {
 
 // Safe delete function that avoids string escaping issues
 function quickDeleteSafe(fileId) {
-    const file = mediaFilesCache.find(f => f.id === fileId);
+    // Convert fileId to number for comparison since IDs in cache are numbers
+    const numericFileId = parseInt(fileId, 10);
+    const file = mediaFilesCache.find(f => f.id === numericFileId);
     if (!file) {
-        console.error('File not found for delete:', fileId);
+        console.error('File not found for delete:', fileId, 'converted to:', numericFileId);
         showNotification('File not found', 'error');
         return;
     }
     
     const displayName = file.displayName || file.originalName || file.name;
-    quickDelete(fileId, displayName);
+    quickDelete(numericFileId, displayName);
 }
 
 // Quick rename function for media library

@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Admin Media Gallery</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .button { background: #007cba; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
+        .media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-top: 20px; }
+        .media-item { border: 1px solid #ddd; padding: 10px; border-radius: 5px; }
+        .media-preview img { max-width: 100%; max-height: 150px; object-fit: cover; }
+        .stats { background: #f0f0f0; padding: 15px; border-radius: 5px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>Admin Media Gallery Test</h1>
+    
+    <div class="stats">
+        <h3>Statistics</h3>
+        <p>Total Media: <span id="admin-total-media">-</span></p>
+        <p>Total Users: <span id="admin-total-users">-</span></p>
+        <p>Total Size: <span id="admin-total-size">-</span></p>
+    </div>
+    
+    <button class="button" onclick="setupAdminUser()">Setup Admin User</button>
+    <button class="button" onclick="loadAdminMediaGallery()">Load Media Gallery</button>
+    <button class="button" id="download-all-media-btn" onclick="downloadAllMedia()" disabled>Download All Media</button>
+    
+    <div id="admin-media-section">
+        <h3>Media Gallery</h3>
+        <div id="admin-media-grid" class="media-grid">
+            <p>Click "Load Media Gallery" to load admin media...</p>
+        </div>
+    </div>
+    
+    <div id="console-output" style="background: #000; color: #0f0; padding: 15px; margin-top: 20px; font-family: monospace; height: 200px; overflow-y: auto;"></div>
+    
+    <script>
+        const API_BASE_URL = 'http://localhost:8080/api';
+        
+        // Custom console logging to display on page
+        const originalLog = console.log;
+        const originalError = console.error;
+        const consoleOutput = document.getElementById('console-output');
+        
+        function logToPage(message, isError = false) {
+            const div = document.createElement('div');
+            div.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+            if (isError) div.style.color = '#f00';
+            consoleOutput.appendChild(div);
+            consoleOutput.scrollTop = consoleOutput.scrollHeight;
+        }
+        
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            logToPage(args.join(' '));
+        };
+        
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            logToPage(args.join(' '), true);
+        };
+        
+        function setupAdminUser() {
+            const adminUser = {
+                id: 1,
+                username: 'admin',
+                isAdmin: true
+            };
+            localStorage.setItem('currentUser', JSON.stringify(adminUser));
+            console.log('✅ Admin user set in localStorage:', adminUser);
+        }
+        
+        async function fetchFromAPI(endpoint, options = {}) {
+            try {
+                const url = `${API_BASE_URL}${endpoint}`;
+                console.log(`🌐 Making API request to: ${url}`);
+                
+                const config = {
+                    method: 'GET',
+                    ...options
+                };
+                
+                const response = await fetch(url, config);
+                
+                if (!response.ok) {
+                    console.error(`❌ API request failed: ${response.status} ${response.statusText} for ${url}`);
+                    throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log(`📦 API response from ${endpoint}:`, JSON.stringify(data, null, 2));
+                return data;
+            } catch (error) {
+                console.error('💥 API request error:', error);
+                throw error;
+            }
+        }
+        
+        async function loadAdminMediaGallery() {
+            console.log('🔧 Starting loadAdminMediaGallery function');
+            const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+            console.log('👤 Current user:', JSON.stringify(currentUser));
+            
+            if (!currentUser || !currentUser.isAdmin) {
+                console.error('❌ User is not admin or not logged in');
+                return;
+            }
+            
+            console.log('✅ User is admin, proceeding with admin media gallery load');
+            
+            const adminMediaGrid = document.getElementById('admin-media-grid');
+            const totalMediaElement = document.getElementById('admin-total-media');
+            const totalUsersElement = document.getElementById('admin-total-users');
+            const totalSizeElement = document.getElementById('admin-total-size');
+            const downloadBtn = document.getElementById('download-all-media-btn');
+            
+            try {
+                console.log('🌐 Making API call to /admin/media/all');
+                const response = await fetchFromAPI('/admin/media/all');
+                
+                if (response.success && response.data) {
+                    const mediaData = response.data;
+                    const allMedia = mediaData.media;
+                    
+                    console.log(`📊 Found ${allMedia.length} media files`);
+                    
+                    // Update statistics
+                    if (totalMediaElement) {
+                        totalMediaElement.textContent = mediaData.statistics.totalMedia;
+                    }
+                    
+                    if (totalUsersElement) {
+                        totalUsersElement.textContent = mediaData.statistics.totalUsers;
+                    }
+                    
+                    if (totalSizeElement) {
+                        const sizeInMB = (mediaData.statistics.totalSize / (1024 * 1024)).toFixed(2);
+                        totalSizeElement.textContent = `${sizeInMB} MB`;
+                    }
+                    
+                    // Enable download button
+                    if (downloadBtn) {
+                        downloadBtn.disabled = false;
+                    }
+                    
+                    // Display media in grid
+                    if (adminMediaGrid) {
+                        adminMediaGrid.innerHTML = '';
+                        
+                        if (allMedia.length === 0) {
+                            adminMediaGrid.innerHTML = `
+                                <div>
+                                    <h4>No Media Files Found</h4>
+                                    <p>No media files exist in the system yet.</p>
+                                </div>
+                            `;
+                        } else {
+                            allMedia.forEach(media => {
+                                const fileExtension = media.file_name.split('.').pop().toLowerCase();
+                                const isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(fileExtension);
+                                
+                                let mediaPreview = '';
+                                if (isImage) {
+                                    mediaPreview = `
+                                        <div class="media-preview">
+                                            <img src="${media.file_path}" alt="${media.file_name}" loading="lazy">
+                                        </div>
+                                    `;
+                                } else {
+                                    mediaPreview = `
+                                        <div class="media-preview">
+                                            <span>${fileExtension.toUpperCase()}</span>
+                                        </div>
+                                    `;
+                                }
+                                
+                                const uploadDate = new Date(media.upload_date).toLocaleDateString();
+                                const fileSize = media.file_size ? `${(media.file_size / 1024).toFixed(1)} KB` : 'Unknown';
+                                
+                                adminMediaGrid.innerHTML += `
+                                    <div class="media-item">
+                                        ${mediaPreview}
+                                        <h5>${media.file_name}</h5>
+                                        <p><strong>User:</strong> ${media.username || 'Anonymous'}</p>
+                                        <p><strong>Date:</strong> ${uploadDate}</p>
+                                        <p><strong>Size:</strong> ${fileSize}</p>
+                                        <button onclick="viewMedia('${media.file_path}')">View</button>
+                                        <button onclick="downloadMedia('${media.file_path}', '${media.file_name}')">Download</button>
+                                    </div>
+                                `;
+                            });
+                            
+                            console.log('✅ Media gallery loaded successfully');
+                        }
+                    }
+                } else {
+                    console.error('❌ API response failed or no data:', response);
+                    adminMediaGrid.innerHTML = '<div>Error loading media data. Check console for details.</div>';
+                }
+                
+            } catch (error) {
+                console.error('💥 Error loading admin media gallery:', error);
+                adminMediaGrid.innerHTML = '<div>Error occurred while loading media. Check console for details.</div>';
+            }
+        }
+        
+        function viewMedia(mediaPath) {
+            window.open(mediaPath, '_blank');
+        }
+        
+        function downloadMedia(mediaPath, fileName) {
+            const link = document.createElement('a');
+            link.href = mediaPath;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        async function downloadAllMedia() {
+            console.log('🔽 Starting download all media...');
+            try {
+                const response = await fetchFromAPI('/admin/media/backup-data');
+                
+                if (response.success && response.data) {
+                    console.log('📄 Creating backup JSON...');
+                    const backupData = response.data;
+                    const jsonBlob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+                    const jsonUrl = URL.createObjectURL(jsonBlob);
+                    
+                    const jsonLink = document.createElement('a');
+                    jsonLink.href = jsonUrl;
+                    jsonLink.download = `media-backup-${new Date().toISOString().split('T')[0]}.json`;
+                    document.body.appendChild(jsonLink);
+                    jsonLink.click();
+                    document.body.removeChild(jsonLink);
+                    URL.revokeObjectURL(jsonUrl);
+                    
+                    console.log('✅ Backup JSON downloaded successfully');
+                } else {
+                    console.error('❌ Failed to get backup data');
+                }
+            } catch (error) {
+                console.error('💥 Error downloading backup:', error);
+            }
+        }
+    </script>
+</body>
+</html>

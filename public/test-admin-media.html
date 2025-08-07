@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Media Test</title>
+</head>
+<body>
+    <h1>Admin Media Gallery Test</h1>
+    <div id="admin-media-section" style="display: none;">
+        <div id="admin-total-media">0</div>
+        <div id="admin-total-users">0</div>
+        <div id="admin-total-size">0</div>
+        <button id="download-all-media-btn">Download All</button>
+        <div id="admin-media-grid"></div>
+    </div>
+    
+    <script>
+        // Mock admin user
+        localStorage.setItem('currentUser', JSON.stringify({
+            id: 1,
+            username: 'admin',
+            isAdmin: true
+        }));
+        
+        const API_BASE_URL = 'http://localhost:8080/api';
+        
+        async function fetchFromAPI(endpoint, options = {}) {
+            try {
+                const url = `${API_BASE_URL}${endpoint}`;
+                console.log(`Making API request to: ${url}`);
+                
+                const config = {
+                    method: 'GET',
+                    ...options
+                };
+                
+                const response = await fetch(url, config);
+                
+                if (!response.ok) {
+                    console.error(`API request failed: ${response.status} ${response.statusText} for ${url}`);
+                    throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log(`API response from ${endpoint}:`, data);
+                return data;
+            } catch (error) {
+                console.error('API request error:', error);
+                throw error;
+            }
+        }
+        
+        // Load admin media gallery
+        async function loadAdminMediaGallery() {
+            console.log('🔧 Starting loadAdminMediaGallery function');
+            const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+            console.log('👤 Current user:', currentUser);
+            
+            if (!currentUser || !currentUser.isAdmin) {
+                console.log('❌ User is not admin or not logged in, skipping admin media gallery');
+                return;
+            }
+            
+            console.log('✅ User is admin, proceeding with admin media gallery load');
+            
+            const adminMediaSection = document.getElementById('admin-media-section');
+            const adminMediaGrid = document.getElementById('admin-media-grid');
+            const totalMediaElement = document.getElementById('admin-total-media');
+            const totalUsersElement = document.getElementById('admin-total-users');
+            const totalSizeElement = document.getElementById('admin-total-size');
+            const downloadBtn = document.getElementById('download-all-media-btn');
+            
+            console.log('🔍 DOM elements found:', {
+                adminMediaSection: !!adminMediaSection,
+                adminMediaGrid: !!adminMediaGrid,
+                totalMediaElement: !!totalMediaElement,
+                totalUsersElement: !!totalUsersElement,
+                totalSizeElement: !!totalSizeElement,
+                downloadBtn: !!downloadBtn
+            });
+            
+            // Show admin media section
+            if (adminMediaSection) {
+                adminMediaSection.style.display = 'block';
+                console.log('👁️ Admin media section made visible');
+            }
+            
+            try {
+                console.log('🌐 Making API call to /admin/media/all');
+                // Load all media using admin API endpoint
+                const response = await fetchFromAPI('/admin/media/all');
+                console.log('📦 API response received:', response);
+                
+                if (response.success && response.data) {
+                    const mediaData = response.data;
+                    const allMedia = mediaData.media;
+                    
+                    console.log('📊 Media data:', mediaData);
+                    console.log('🖼️ All media files:', allMedia);
+                    
+                    // Update admin statistics
+                    if (totalMediaElement) {
+                        totalMediaElement.textContent = mediaData.statistics.totalMedia;
+                        console.log('📈 Updated total media count');
+                    }
+                    
+                    if (totalUsersElement) {
+                        totalUsersElement.textContent = mediaData.statistics.totalUsers;
+                        console.log('👥 Updated total users count');
+                    }
+                    
+                    if (totalSizeElement) {
+                        const sizeInMB = (mediaData.statistics.totalSize / (1024 * 1024)).toFixed(2);
+                        totalSizeElement.textContent = `${sizeInMB} MB`;
+                        console.log('💾 Updated total size');
+                    }
+                    
+                    // Display media in admin grid
+                    if (adminMediaGrid) {
+                        adminMediaGrid.innerHTML = '';
+                        
+                        if (allMedia.length === 0) {
+                            adminMediaGrid.innerHTML = `
+                                <div class="media-empty">
+                                    <h4>No Media Files Found</h4>
+                                    <p>No media files exist in the system yet.</p>
+                                </div>
+                            `;
+                            console.log('📭 No media files found');
+                        } else {
+                            console.log('🎨 Rendering media grid with', allMedia.length, 'items');
+                            
+                            allMedia.forEach((media, index) => {
+                                console.log(`📄 Processing media ${index + 1}:`, media);
+                                
+                                const fileExtension = media.file_name.split('.').pop().toLowerCase();
+                                const isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(fileExtension);
+                                
+                                let mediaPreview = '';
+                                if (isImage) {
+                                    mediaPreview = `
+                                        <div class="media-preview">
+                                            <img src="${media.file_path}" alt="${media.file_name}" loading="lazy" style="max-width: 200px; max-height: 200px;">
+                                        </div>
+                                    `;
+                                } else {
+                                    mediaPreview = `
+                                        <div class="media-preview media-file">
+                                            <span>${fileExtension.toUpperCase()}</span>
+                                        </div>
+                                    `;
+                                }
+                                
+                                const uploadDate = new Date(media.upload_date).toLocaleDateString();
+                                const fileSize = media.file_size ? `${(media.file_size / 1024).toFixed(1)} KB` : 'Unknown';
+                                
+                                adminMediaGrid.innerHTML += `
+                                    <div style="border: 1px solid #ccc; padding: 10px; margin: 10px; display: inline-block;">
+                                        ${mediaPreview}
+                                        <h5>${media.file_name}</h5>
+                                        <p>User: ${media.username || 'Anonymous'}</p>
+                                        <p>Date: ${uploadDate}</p>
+                                        <p>Size: ${fileSize}</p>
+                                    </div>
+                                `;
+                            });
+                            
+                            console.log('✅ Media grid rendered successfully');
+                        }
+                    }
+                } else {
+                    console.error('❌ API response failed or no data:', response);
+                }
+                
+            } catch (error) {
+                console.error('💥 Error loading admin media gallery:', error);
+            }
+        }
+        
+        // Test when page loads
+        window.addEventListener('load', () => {
+            console.log('🚀 Page loaded, testing admin media gallery');
+            loadAdminMediaGallery();
+        });
+    </script>
+</body>
+</html>
