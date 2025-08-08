@@ -448,7 +448,172 @@
                       </tbody>
                   </table>
               </div>
-          </div>        <!-- <div class="dashboard-recent">
+          </div>
+
+          <!-- Admin Storage Cleanup Section - Only visible to administrators -->
+          <div class="dashboard-admin-storage" id="admin-storage-section" style="display: none;">
+              <div class="content-container">
+                  <div class="storage-header admin-header">
+                      <h3><i class="fas fa-broom"></i> Storage Cleanup (Admin)</h3>
+                      <div class="admin-actions">
+                          <button class="btn btn-secondary" onclick="scanOrphanedFiles()">
+                              <i class="fas fa-search"></i> Scan for Orphaned Files
+                          </button>
+                          <span class="admin-badge">Administrator</span>
+                      </div>
+                  </div>
+                  
+                  <div class="storage-stats" id="storage-stats" style="display: none;">
+                      <div class="admin-stat">
+                          <i class="fas fa-files-o"></i>
+                          <span>Total Files: <strong id="storage-total-files">0</strong></span>
+                      </div>
+                      <div class="admin-stat">
+                          <i class="fas fa-trash"></i>
+                          <span>Orphaned Files: <strong id="storage-orphaned-files">0</strong></span>
+                      </div>
+                      <div class="admin-stat">
+                          <i class="fas fa-hdd"></i>
+                          <span>Orphaned Size: <strong id="storage-orphaned-size">0 MB</strong></span>
+                      </div>
+                  </div>
+
+                  <div class="storage-results" id="storage-results" style="display: none;">
+                      <div class="storage-actions">
+                          <button class="btn btn-danger" onclick="cleanupOrphanedFiles()" id="cleanup-btn" style="display: none;">
+                              <i class="fas fa-trash"></i> Delete Orphaned Files
+                          </button>
+                          <button class="btn btn-info" onclick="downloadOrphanedList()" id="download-btn" style="display: none;">
+                              <i class="fas fa-download"></i> Download List
+                          </button>
+                      </div>
+                      
+                      <div class="orphaned-files-list" id="orphaned-files-list">
+                          <!-- Orphaned files will be listed here -->
+                      </div>
+                  </div>
+
+                  <div class="storage-loading" id="storage-loading" style="display: none;">
+                      <i class="fas fa-spinner fa-spin"></i> Scanning storage...
+                  </div>
+              </div>
+          </div>
+
+          <!-- Admin Database Management Section - Only visible to administrators -->
+          <div class="dashboard-admin-database" id="admin-database-section" style="display: none;">
+              <div class="content-container">
+                  <div class="database-header admin-header">
+                      <h3><i class="fas fa-database"></i> Database Management (Admin)</h3>
+                      <div class="admin-actions">
+                          <button class="btn btn-info" onclick="refreshDatabaseStats()">
+                              <i class="fas fa-sync-alt"></i> Refresh Stats
+                          </button>
+                          <span class="admin-badge">Administrator</span>
+                      </div>
+                  </div>
+
+                  <!-- Database Statistics -->
+                  <div class="database-stats" id="database-stats">
+                      <div class="stats-grid">
+                          <div class="stat-card">
+                              <i class="fas fa-users"></i>
+                              <h4>Users</h4>
+                              <div class="stat-number" id="db-user-count">0</div>
+                              <small>Total Users</small>
+                          </div>
+                          <div class="stat-card">
+                              <i class="fas fa-folder"></i>
+                              <h4>Projects</h4>
+                              <div class="stat-number" id="db-project-count">0</div>
+                              <small>Total Projects</small>
+                          </div>
+                          <div class="stat-card">
+                              <i class="fas fa-file-image"></i>
+                              <h4>Media Files</h4>
+                              <div class="stat-number" id="db-media-count">0</div>
+                              <small>Total Files</small>
+                          </div>
+                          <div class="stat-card">
+                              <i class="fas fa-map-marker-alt"></i>
+                              <h4>POIs</h4>
+                              <div class="stat-number" id="db-poi-count">0</div>
+                              <small>Points of Interest</small>
+                          </div>
+                          <div class="stat-card">
+                              <i class="fas fa-sticky-note"></i>
+                              <h4>Cards</h4>
+                              <div class="stat-number" id="db-card-count">0</div>
+                              <small>Total Cards</small>
+                          </div>
+                      </div>
+                  </div>
+
+                  <!-- Table Navigation Tabs -->
+                  <div class="database-tabs">
+                      <button class="tab-button active" onclick="switchDatabaseTable('project')" id="tab-project">
+                          <i class="fas fa-folder"></i> Projects
+                      </button>
+                      <button class="tab-button" onclick="switchDatabaseTable('media_files')" id="tab-media_files">
+                          <i class="fas fa-file-image"></i> Media Files
+                      </button>
+                      <button class="tab-button" onclick="switchDatabaseTable('card')" id="tab-card">
+                          <i class="fas fa-sticky-note"></i> Cards
+                      </button>
+                      <button class="tab-button" onclick="switchDatabaseTable('poi')" id="tab-poi">
+                          <i class="fas fa-map-marker-alt"></i> POIs
+                      </button>
+                      <button class="tab-button" onclick="switchDatabaseTable('user')" id="tab-user">
+                          <i class="fas fa-users"></i> Users
+                      </button>
+                      <button class="tab-button" onclick="switchDatabaseTable('art')" id="tab-art">
+                          <i class="fas fa-palette"></i> Art
+                      </button>
+                      <button class="tab-button" onclick="switchDatabaseTable('project_topics')" id="tab-project_topics">
+                          <i class="fas fa-list"></i> Topics
+                      </button>
+                  </div>
+
+                  <!-- Table Content -->
+                  <div class="database-table-container">
+                      <div class="table-controls">
+                          <div class="table-info">
+                              <span id="table-name">Projects</span> - 
+                              <span id="table-record-count">0 records</span>
+                          </div>
+                          <div class="table-pagination">
+                              <button class="btn btn-sm" onclick="previousPage()" id="prev-page-btn" disabled>
+                                  <i class="fas fa-chevron-left"></i> Previous
+                              </button>
+                              <span id="pagination-info">Page 1 of 1</span>
+                              <button class="btn btn-sm" onclick="nextPage()" id="next-page-btn" disabled>
+                                  Next <i class="fas fa-chevron-right"></i>
+                              </button>
+                          </div>
+                      </div>
+
+                      <div class="table-wrapper">
+                          <table class="database-table" id="database-table">
+                              <thead id="table-header">
+                                  <!-- Table headers will be populated dynamically -->
+                              </thead>
+                              <tbody id="table-body">
+                                  <tr>
+                                      <td colspan="100%" class="table-loading">
+                                          <i class="fas fa-spinner fa-spin"></i> Loading table data...
+                                      </td>
+                                  </tr>
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
+
+                  <div class="database-loading" id="database-loading" style="display: none;">
+                      <i class="fas fa-spinner fa-spin"></i> Loading database information...
+                  </div>
+              </div>
+          </div>
+
+        <!-- <div class="dashboard-recent">
             <div class="recent-section">
                 <h3>Recent Activity</h3>
                 <div class="recent-items" id="recent-activity">

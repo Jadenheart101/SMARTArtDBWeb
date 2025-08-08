@@ -42,6 +42,75 @@ async function getNextAvailableId(tableName, idColumn) {
   }
 }
 
+// Helper function for automatic storage cleanup
+async function performAutomaticStorageCleanup() {
+  try {
+    console.log('🧹 Starting automatic storage cleanup...');
+    
+    // Get all files referenced in the database
+    const dbFiles = await executeQuery('SELECT file_path FROM media_files WHERE file_path IS NOT NULL');
+    const dbFilePaths = new Set(dbFiles.map(row => {
+      // Normalize path - remove leading slash and convert to forward slashes
+      let path = row.file_path;
+      if (path.startsWith('/')) path = path.substring(1);
+      return path.replace(/\\/g, '/');
+    }));
+    
+    // Recursively scan uploads directory
+    const orphanedFiles = [];
+    
+    async function scanDirectory(dirPath, relativePath = '') {
+      try {
+        const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
+        
+        for (const entry of entries) {
+          const fullPath = path.join(dirPath, entry.name);
+          const relativeFilePath = path.join(relativePath, entry.name).replace(/\\/g, '/');
+          
+          if (entry.isDirectory()) {
+            await scanDirectory(fullPath, relativeFilePath);
+          } else {
+            // Check if file is referenced in database
+            const uploadRelativePath = relativeFilePath.startsWith('uploads/') 
+              ? relativeFilePath 
+              : `uploads/${relativeFilePath}`;
+              
+            if (!dbFilePaths.has(uploadRelativePath) && !dbFilePaths.has(relativeFilePath)) {
+              orphanedFiles.push(fullPath);
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Error scanning directory ${dirPath}:`, error.message);
+      }
+    }
+    
+    const uploadsDir = path.join(process.cwd(), 'uploads');
+    await scanDirectory(uploadsDir, 'uploads');
+    
+    // Delete orphaned files
+    let deletedCount = 0;
+    for (const filePath of orphanedFiles) {
+      try {
+        await fs.promises.unlink(filePath);
+        deletedCount++;
+        console.log(`🗑️ Auto-deleted orphaned file: ${filePath}`);
+      } catch (error) {
+        console.error(`❌ Failed to auto-delete ${filePath}:`, error.message);
+      }
+    }
+    
+    if (deletedCount > 0) {
+      console.log(`✅ Automatic cleanup completed: deleted ${deletedCount} orphaned files`);
+    }
+    
+    return { deletedCount, totalOrphaned: orphanedFiles.length };
+  } catch (error) {
+    console.error('Automatic storage cleanup error:', error);
+    return { deletedCount: 0, totalOrphaned: 0 };
+  }
+}
+
 const app = express();
 const PORT = process.env.PORT || 8080;
 
@@ -672,7 +741,14 @@ app.delete('/api/projects/:id', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Project not found or could not be deleted' });
     }
     
-    res.json({ success: true, message: 'Project deleted successfully' });
+    // Perform automatic storage cleanup after project deletion
+    const cleanupResult = await performAutomaticStorageCleanup();
+    let cleanupMessage = '';
+    if (cleanupResult.deletedCount > 0) {
+      cleanupMessage = ` and cleaned up ${cleanupResult.deletedCount} orphaned file(s)`;
+    }
+    
+    res.json({ success: true, message: `Project deleted successfully${cleanupMessage}` });
   } catch (error) {
     console.error('Error deleting project:', error);
     res.status(500).json({ success: false, message: 'Error deleting project', error: error.message });
@@ -1051,7 +1127,14 @@ app.delete('/api/media/file/:fileId', async (req, res) => {
       await executeQuery('DELETE FROM media_files WHERE id = ?', [fileId]);
       console.log('File deleted from database');
       
-      res.json({ success: true, message: 'File deleted successfully' });
+      // Perform automatic storage cleanup after file deletion
+      const cleanupResult = await performAutomaticStorageCleanup();
+      let cleanupMessage = '';
+      if (cleanupResult.deletedCount > 0) {
+        cleanupMessage = ` and cleaned up ${cleanupResult.deletedCount} orphaned file(s)`;
+      }
+      
+      res.json({ success: true, message: `File deleted successfully${cleanupMessage}` });
     } catch (error) {
       console.error('Error deleting file:', error);
       res.status(500).json({ success: false, message: 'Error deleting file' });
@@ -1532,6 +1615,184 @@ app.get('/', (req, res) => {
   });
 });
 
+// ========== ADMIN DATABASE MANAGEMENT ENDPOINTS ==========
+
+// Get database table data (Admin only)
+app.get('/api/admin/database/tables/:tableName', async (req, res) => {
+    try {
+        const { tableName } = req.params;
+        const { page = 1, limit = 50 } = req.query;
+        
+        // Validate table name to prevent SQL injection
+        const allowedTables = ['project', 'media_files', 'card', 'poi', 'user', 'art', 'project_topics'];
+        if (!allowedTables.includes(tableName)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid table name'
+            });
+        }
+        
+        const offset = (page - 1) * limit;
+        
+        // Get total count
+        const countResult = await executeQuery(`SELECT COUNT(*) as total FROM ${tableName}`);
+        const total = countResult[0].total;
+        
+        // Get table data with pagination
+        let query = `SELECT * FROM ${tableName}`;
+        let queryWithJoins = query;
+        
+        // Add JOINs for better data display
+        if (tableName === 'project') {
+            queryWithJoins = `
+                SELECT 
+                    p.*,
+                    u.UserName as creator_name,
+                    m.file_name as image_filename,
+                    m.displayName as image_display_name
+                FROM project p
+                LEFT JOIN user u ON p.user_id = u.UserID
+                LEFT JOIN media_files m ON p.image_id = m.id
+            `;
+        } else if (tableName === 'media_files') {
+            queryWithJoins = `
+                SELECT 
+                    mf.*,
+                    u.UserName as owner_name
+                FROM media_files mf
+                LEFT JOIN user u ON mf.user_id = u.UserID
+            `;
+        } else if (tableName === 'card') {
+            queryWithJoins = `
+                SELECT 
+                    c.*,
+                    p.poi_title,
+                    pt.topic_title,
+                    pr.ProjectName
+                FROM card c
+                LEFT JOIN poi p ON c.poi_id = p.id
+                LEFT JOIN project_topics pt ON p.topic_id = pt.id
+                LEFT JOIN project pr ON pt.project_id = pr.ProjectID
+            `;
+        } else if (tableName === 'poi') {
+            queryWithJoins = `
+                SELECT 
+                    poi.*,
+                    pt.topic_title,
+                    pr.ProjectName
+                FROM poi
+                LEFT JOIN project_topics pt ON poi.topic_id = pt.id
+                LEFT JOIN project pr ON pt.project_id = pr.ProjectID
+            `;
+        } else if (tableName === 'project_topics') {
+            queryWithJoins = `
+                SELECT 
+                    pt.*,
+                    pr.ProjectName,
+                    u.UserName as project_creator
+                FROM project_topics pt
+                LEFT JOIN project pr ON pt.project_id = pr.ProjectID
+                LEFT JOIN user u ON pr.user_id = u.UserID
+            `;
+        }
+        
+        queryWithJoins += ` ORDER BY 1 LIMIT ${limit} OFFSET ${offset}`;
+        
+        const data = await executeQuery(queryWithJoins);
+        
+        // Get table schema information
+        const schemaResult = await executeQuery(`DESCRIBE ${tableName}`);
+        const schema = schemaResult.map(col => ({
+            field: col.Field,
+            type: col.Type,
+            null: col.Null,
+            key: col.Key,
+            default: col.Default,
+            extra: col.Extra
+        }));
+        
+        res.json({
+            success: true,
+            data: {
+                tableName,
+                schema,
+                rows: data,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total,
+                    totalPages: Math.ceil(total / limit)
+                }
+            }
+        });
+        
+    } catch (error) {
+        console.error('Database table fetch error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch table data',
+            details: error.message
+        });
+    }
+});
+
+// Get database table statistics (Admin only)
+app.get('/api/admin/database/stats', async (req, res) => {
+    try {
+        const stats = {};
+        const tables = ['project', 'media_files', 'card', 'poi', 'user', 'art', 'project_topics'];
+        
+        for (const table of tables) {
+            const result = await executeQuery(`SELECT COUNT(*) as count FROM ${table}`);
+            stats[table] = result[0].count;
+        }
+        
+        // Get additional statistics
+        const userStats = await executeQuery(`
+            SELECT 
+                COUNT(*) as total_users,
+                SUM(isAdmin) as admin_users,
+                COUNT(*) - SUM(isAdmin) as regular_users
+            FROM user
+        `);
+        
+        const mediaStats = await executeQuery(`
+            SELECT 
+                COUNT(*) as total_files,
+                SUM(file_size) as total_size,
+                COUNT(DISTINCT user_id) as users_with_media
+            FROM media_files
+        `);
+        
+        const projectStats = await executeQuery(`
+            SELECT 
+                COUNT(*) as total_projects,
+                SUM(Approved) as approved_projects,
+                SUM(NeedsReview) as projects_needing_review,
+                COUNT(DISTINCT user_id) as unique_creators
+            FROM project
+        `);
+        
+        res.json({
+            success: true,
+            data: {
+                tableCounts: stats,
+                userStats: userStats[0],
+                mediaStats: mediaStats[0],
+                projectStats: projectStats[0]
+            }
+        });
+        
+    } catch (error) {
+        console.error('Database stats error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch database statistics',
+            details: error.message
+        });
+    }
+});
+
 // ========== ADMIN MEDIA ENDPOINTS ==========
 
 // Get all media files for all users (Admin only)
@@ -1714,9 +1975,16 @@ app.delete('/api/admin/media/:mediaId', async (req, res) => {
             // Continue anyway - database record is already deleted
         }
 
+        // Perform automatic storage cleanup after media deletion
+        const cleanupResult = await performAutomaticStorageCleanup();
+        let cleanupMessage = '';
+        if (cleanupResult.deletedCount > 0) {
+            cleanupMessage = ` and cleaned up ${cleanupResult.deletedCount} orphaned file(s)`;
+        }
+
         res.json({ 
             success: true, 
-            message: 'Media file deleted successfully' 
+            message: `Media file deleted successfully${cleanupMessage}` 
         });
         
     } catch (error) {
@@ -1987,9 +2255,16 @@ app.delete('/api/admin/users/:userId', async (req, res) => {
         
         console.log(`🗑️ Admin deleted user: "${user.UserName}" (ID: ${userId})`);
         
+        // Perform automatic storage cleanup after user deletion
+        const cleanupResult = await performAutomaticStorageCleanup();
+        let cleanupMessage = '';
+        if (cleanupResult.deletedCount > 0) {
+            cleanupMessage = ` and cleaned up ${cleanupResult.deletedCount} orphaned file(s)`;
+        }
+        
         res.json({ 
             success: true, 
-            message: `User "${user.UserName}" has been deleted along with ${projectCount[0].count} project(s) and ${mediaCount[0].count} media file(s)`
+            message: `User "${user.UserName}" has been deleted along with ${projectCount[0].count} project(s) and ${mediaCount[0].count} media file(s)${cleanupMessage}`
         });
         
     } catch (error) {
@@ -1997,6 +2272,146 @@ app.delete('/api/admin/users/:userId', async (req, res) => {
         res.status(500).json({ 
             success: false, 
             error: 'Error deleting user' 
+        });
+    }
+});
+
+// Admin: Clean up orphaned storage files
+app.post('/api/admin/storage/cleanup', async (req, res) => {
+    try {
+        console.log('🧹 Starting storage cleanup...');
+        
+        // Get all files referenced in the database
+        const dbFiles = await executeQuery('SELECT file_path FROM media_files WHERE file_path IS NOT NULL');
+        const dbFilePaths = new Set(dbFiles.map(row => {
+            // Normalize path - remove leading slash and convert to forward slashes
+            let path = row.file_path;
+            if (path.startsWith('/')) path = path.substring(1);
+            return path.replace(/\\/g, '/');
+        }));
+        
+        console.log(`📊 Found ${dbFilePaths.size} files referenced in database`);
+        
+        // Recursively scan uploads directory
+        const fs = await import('fs');
+        const path = await import('path');
+        
+        const orphanedFiles = [];
+        const totalFiles = [];
+        
+        async function scanDirectory(dirPath, relativePath = '') {
+            try {
+                const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
+                
+                for (const entry of entries) {
+                    const fullPath = path.join(dirPath, entry.name);
+                    const relativeFilePath = path.join(relativePath, entry.name).replace(/\\/g, '/');
+                    
+                    if (entry.isDirectory()) {
+                        await scanDirectory(fullPath, relativeFilePath);
+                    } else {
+                        totalFiles.push(relativeFilePath);
+                        
+                        // Check if file is referenced in database
+                        const uploadRelativePath = relativeFilePath.startsWith('uploads/') 
+                            ? relativeFilePath 
+                            : `uploads/${relativeFilePath}`;
+                            
+                        if (!dbFilePaths.has(uploadRelativePath) && !dbFilePaths.has(relativeFilePath)) {
+                            orphanedFiles.push({
+                                fullPath,
+                                relativePath: relativeFilePath,
+                                size: (await fs.promises.stat(fullPath)).size
+                            });
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error(`Error scanning directory ${dirPath}:`, error.message);
+            }
+        }
+        
+        const uploadsDir = path.join(process.cwd(), 'uploads');
+        await scanDirectory(uploadsDir, 'uploads');
+        
+        console.log(`📊 Scanned ${totalFiles.length} total files`);
+        console.log(`🗑️ Found ${orphanedFiles.length} orphaned files`);
+        
+        // Calculate total size of orphaned files
+        const totalOrphanedSize = orphanedFiles.reduce((sum, file) => sum + file.size, 0);
+        const totalOrphanedSizeMB = (totalOrphanedSize / (1024 * 1024)).toFixed(2);
+        
+        // If this is just a dry run (default), return the results without deleting
+        const isDryRun = req.body.dryRun !== false; // Default to true
+        
+        if (isDryRun) {
+            console.log(`📋 Dry run complete - would delete ${orphanedFiles.length} files (${totalOrphanedSizeMB} MB)`);
+            
+            return res.json({
+                success: true,
+                dryRun: true,
+                summary: {
+                    totalFiles: totalFiles.length,
+                    orphanedFiles: orphanedFiles.length,
+                    totalOrphanedSize: totalOrphanedSize,
+                    totalOrphanedSizeMB: parseFloat(totalOrphanedSizeMB)
+                },
+                orphanedFiles: orphanedFiles.slice(0, 50).map(file => ({
+                    path: file.relativePath,
+                    size: file.size,
+                    sizeMB: (file.size / (1024 * 1024)).toFixed(2)
+                })),
+                message: orphanedFiles.length > 50 
+                    ? `Showing first 50 of ${orphanedFiles.length} orphaned files. Set dryRun: false to delete them.`
+                    : `Found ${orphanedFiles.length} orphaned files. Set dryRun: false to delete them.`
+            });
+        }
+        
+        // Actually delete the orphaned files
+        let deletedCount = 0;
+        let deletedSize = 0;
+        const errors = [];
+        
+        for (const file of orphanedFiles) {
+            try {
+                await fs.promises.unlink(file.fullPath);
+                deletedCount++;
+                deletedSize += file.size;
+                console.log(`🗑️ Deleted: ${file.relativePath}`);
+            } catch (error) {
+                console.error(`❌ Failed to delete ${file.relativePath}:`, error.message);
+                errors.push({
+                    file: file.relativePath,
+                    error: error.message
+                });
+            }
+        }
+        
+        const deletedSizeMB = (deletedSize / (1024 * 1024)).toFixed(2);
+        
+        console.log(`✅ Storage cleanup complete: deleted ${deletedCount} files (${deletedSizeMB} MB)`);
+        
+        res.json({
+            success: true,
+            dryRun: false,
+            summary: {
+                totalFiles: totalFiles.length,
+                orphanedFiles: orphanedFiles.length,
+                deletedFiles: deletedCount,
+                deletedSize: deletedSize,
+                deletedSizeMB: parseFloat(deletedSizeMB),
+                errors: errors.length
+            },
+            errors: errors.length > 0 ? errors.slice(0, 10) : [],
+            message: `Deleted ${deletedCount} orphaned files (${deletedSizeMB} MB)${errors.length > 0 ? ` with ${errors.length} errors` : ''}`
+        });
+        
+    } catch (error) {
+        console.error('Storage cleanup error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Storage cleanup failed',
+            details: error.message
         });
     }
 });

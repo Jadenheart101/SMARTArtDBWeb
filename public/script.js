@@ -1627,11 +1627,16 @@ async function loadDashboardData() {
         loadAdminProjects();
         loadAdminMediaGallery();
         loadAdminUsers();
+        showAdminStorageSection();
+        showAdminDatabaseSection();
+        initializeDatabaseManagement();
     } else {
         // Hide admin sections for regular users
         const adminProjectsSection = document.getElementById('admin-projects-section');
         const adminMediaSection = document.getElementById('admin-media-section');
         const adminUsersSection = document.getElementById('admin-users-section');
+        const adminStorageSection = document.getElementById('admin-storage-section');
+        const adminDatabaseSection = document.getElementById('admin-database-section');
         if (adminProjectsSection) {
             adminProjectsSection.style.display = 'none';
         }
@@ -1640,6 +1645,12 @@ async function loadDashboardData() {
         }
         if (adminUsersSection) {
             adminUsersSection.style.display = 'none';
+        }
+        if (adminStorageSection) {
+            adminStorageSection.style.display = 'none';
+        }
+        if (adminDatabaseSection) {
+            adminDatabaseSection.style.display = 'none';
         }
     }
     
@@ -5172,4 +5183,499 @@ function refreshAdminUsers() {
     }
     
     loadAdminUsers();
+}
+
+// Storage Cleanup Functions
+let currentOrphanedFiles = [];
+
+function showAdminStorageSection() {
+    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    if (!currentUser || !currentUser.isAdmin) return;
+    
+    const adminStorageSection = document.getElementById('admin-storage-section');
+    if (adminStorageSection) {
+        adminStorageSection.style.display = 'block';
+    }
+}
+
+function showAdminDatabaseSection() {
+    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    if (!currentUser || !currentUser.isAdmin) return;
+    
+    const adminDatabaseSection = document.getElementById('admin-database-section');
+    if (adminDatabaseSection) {
+        adminDatabaseSection.style.display = 'block';
+    }
+}
+
+async function scanOrphanedFiles() {
+    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    if (!currentUser || !currentUser.isAdmin) {
+        showNotification('Admin access required', 'error');
+        return;
+    }
+
+    try {
+        document.getElementById('storage-loading').style.display = 'block';
+        document.getElementById('storage-stats').style.display = 'none';
+        document.getElementById('storage-results').style.display = 'none';
+
+        const response = await fetch('/api/admin/storage/cleanup', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ dryRun: true })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            currentOrphanedFiles = result.orphanedFiles || [];
+            
+            // Update stats
+            document.getElementById('storage-total-files').textContent = result.summary.totalFiles;
+            document.getElementById('storage-orphaned-files').textContent = result.summary.orphanedFiles;
+            document.getElementById('storage-orphaned-size').textContent = result.summary.totalOrphanedSizeMB + ' MB';
+
+            // Show stats
+            document.getElementById('storage-stats').style.display = 'flex';
+            document.getElementById('storage-loading').style.display = 'none';
+
+            if (result.summary.orphanedFiles > 0) {
+                displayOrphanedFiles(result.orphanedFiles);
+                document.getElementById('cleanup-btn').style.display = 'inline-block';
+                document.getElementById('download-btn').style.display = 'inline-block';
+                document.getElementById('storage-results').style.display = 'block';
+                showNotification(`Found ${result.summary.orphanedFiles} orphaned files (${result.summary.totalOrphanedSizeMB} MB)`, 'warning');
+            } else {
+                displayEmptyStorage();
+                document.getElementById('storage-results').style.display = 'block';
+                showNotification('No orphaned files found! Storage is clean.', 'success');
+            }
+        } else {
+            showNotification(result.error || 'Failed to scan storage', 'error');
+            document.getElementById('storage-loading').style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Error scanning storage:', error);
+        showNotification('Error occurred while scanning storage', 'error');
+        document.getElementById('storage-loading').style.display = 'none';
+    }
+}
+
+function displayOrphanedFiles(orphanedFiles) {
+    const listContainer = document.getElementById('orphaned-files-list');
+    
+    if (orphanedFiles.length === 0) {
+        displayEmptyStorage();
+        return;
+    }
+
+    const html = orphanedFiles.map(file => `
+        <div class="orphaned-file-item">
+            <div class="orphaned-file-info">
+                <div class="orphaned-file-path">${file.path}</div>
+                <div class="orphaned-file-size">${file.sizeMB} MB</div>
+            </div>
+        </div>
+    `).join('');
+
+    listContainer.innerHTML = html;
+}
+
+function displayEmptyStorage() {
+    const listContainer = document.getElementById('orphaned-files-list');
+    listContainer.innerHTML = `
+        <div class="storage-empty">
+            <i class="fas fa-check-circle"></i>
+            <h4>Storage is Clean!</h4>
+            <p>No orphaned files found. All files are properly referenced in the database.</p>
+        </div>
+    `;
+    document.getElementById('cleanup-btn').style.display = 'none';
+    document.getElementById('download-btn').style.display = 'none';
+}
+
+async function cleanupOrphanedFiles() {
+    if (currentOrphanedFiles.length === 0) {
+        showNotification('No orphaned files to clean up', 'info');
+        return;
+    }
+
+    const confirmMessage = `Are you sure you want to permanently delete ${currentOrphanedFiles.length} orphaned files? This action cannot be undone.`;
+    
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+
+    try {
+        document.getElementById('storage-loading').style.display = 'block';
+        document.getElementById('storage-results').style.display = 'none';
+
+        const response = await fetch('/api/admin/storage/cleanup', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ dryRun: false })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showNotification(`Successfully deleted ${result.summary.deletedFiles} files (${result.summary.deletedSizeMB} MB)`, 'success');
+            
+            // Reset the interface
+            currentOrphanedFiles = [];
+            document.getElementById('storage-loading').style.display = 'none';
+            document.getElementById('storage-stats').style.display = 'none';
+            document.getElementById('storage-results').style.display = 'none';
+            
+            // Automatically rescan to show updated status
+            setTimeout(() => {
+                scanOrphanedFiles();
+            }, 1000);
+            
+        } else {
+            showNotification(result.error || 'Failed to cleanup storage', 'error');
+            document.getElementById('storage-loading').style.display = 'none';
+            document.getElementById('storage-results').style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error cleaning up storage:', error);
+        showNotification('Error occurred during storage cleanup', 'error');
+        document.getElementById('storage-loading').style.display = 'none';
+        document.getElementById('storage-results').style.display = 'block';
+    }
+}
+
+function downloadOrphanedList() {
+    if (currentOrphanedFiles.length === 0) {
+        showNotification('No orphaned files to download', 'info');
+        return;
+    }
+
+    const csvContent = [
+        'File Path,Size (bytes),Size (MB)',
+        ...currentOrphanedFiles.map(file => `"${file.path}",${file.size},"${file.sizeMB}"`)
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `orphaned-files-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+
+    showNotification('Orphaned files list downloaded', 'success');
+}
+
+// ============================
+// Database Management Functions
+// ============================
+
+let currentDatabaseTable = 'project';
+let currentDatabasePage = 1;
+const ROWS_PER_PAGE = 20;
+
+function initializeDatabaseManagement() {
+    console.log('Initializing database management...');
+    
+    // Load database statistics
+    loadDatabaseStats();
+    
+    // Load the default table (project)
+    switchDatabaseTable('project');
+    
+    // Set up pagination handlers
+    const prevButton = document.getElementById('db-prev-page');
+    const nextButton = document.getElementById('db-next-page');
+    
+    if (prevButton) {
+        prevButton.addEventListener('click', () => {
+            if (currentDatabasePage > 1) {
+                currentDatabasePage--;
+                loadDatabaseTable(currentDatabaseTable);
+            }
+        });
+    }
+    
+    if (nextButton) {
+        nextButton.addEventListener('click', () => {
+            currentDatabasePage++;
+            loadDatabaseTable(currentDatabaseTable);
+        });
+    }
+}
+
+async function loadDatabaseStats() {
+    try {
+        console.log('Loading database statistics...');
+        
+        const response = await fetch('/api/admin/database/stats');
+        const result = await response.json();
+        
+        if (result.success) {
+            updateStatsDisplay(result.data);
+        } else {
+            console.error('Failed to load database stats:', result.error);
+            showNotification('Failed to load database statistics', 'error');
+        }
+    } catch (error) {
+        console.error('Error loading database stats:', error);
+        showNotification('Error loading database statistics', 'error');
+    }
+}
+
+function updateStatsDisplay(stats) {
+    const statElements = {
+        projects: document.querySelector('[data-stat="projects"] .stat-number'),
+        media: document.querySelector('[data-stat="media"] .stat-number'),
+        cards: document.querySelector('[data-stat="cards"] .stat-number'),
+        pois: document.querySelector('[data-stat="pois"] .stat-number'),
+        users: document.querySelector('[data-stat="users"] .stat-number'),
+        art: document.querySelector('[data-stat="art"] .stat-number'),
+        topics: document.querySelector('[data-stat="topics"] .stat-number')
+    };
+    
+    // Extract table counts from the nested structure
+    const tableCounts = stats.tableCounts || {};
+    
+    if (statElements.projects) statElements.projects.textContent = tableCounts.project || 0;
+    if (statElements.media) statElements.media.textContent = tableCounts.media_files || 0;
+    if (statElements.cards) statElements.cards.textContent = tableCounts.card || 0;
+    if (statElements.pois) statElements.pois.textContent = tableCounts.poi || 0;
+    if (statElements.users) statElements.users.textContent = tableCounts.user || 0;
+    if (statElements.art) statElements.art.textContent = tableCounts.art || 0;
+    if (statElements.topics) statElements.topics.textContent = tableCounts.project_topics || 0;
+}
+
+function switchDatabaseTable(tableName) {
+    console.log('Switching to table:', tableName);
+    
+    // Update active tab
+    document.querySelectorAll('.tab-button').forEach(button => {
+        button.classList.remove('active');
+    });
+    
+    const activeTab = document.getElementById(`tab-${tableName}`);
+    if (activeTab) {
+        activeTab.classList.add('active');
+    }
+    
+    // Reset pagination
+    currentDatabaseTable = tableName;
+    currentDatabasePage = 1;
+    
+    // Load the table data
+    loadDatabaseTable(tableName);
+}
+
+async function loadDatabaseTable(tableName) {
+    try {
+        console.log(`Loading table: ${tableName}, page: ${currentDatabasePage}`);
+        
+        // Show loading state
+        const tableBody = document.getElementById('database-table-body');
+        const tableInfo = document.getElementById('table-info');
+        
+        if (tableBody) {
+            tableBody.innerHTML = '<tr><td colspan="100%" class="table-loading"><i class="fas fa-spinner fa-spin"></i> Loading data...</td></tr>';
+        }
+        
+        // Fetch table data
+        const response = await fetch(`/api/admin/database/tables/${tableName}?page=${currentDatabasePage}&limit=${ROWS_PER_PAGE}`);
+        const result = await response.json();
+        
+        if (result.success) {
+            displayTableData(result.data.rows, result.data.pagination);
+            updateTableInfo(tableName, result.data.pagination);
+        } else {
+            console.error('Failed to load table data:', result.error);
+            if (tableBody) {
+                tableBody.innerHTML = '<tr><td colspan="100%" class="table-loading">Failed to load data</td></tr>';
+            }
+            showNotification(`Failed to load ${tableName} data`, 'error');
+        }
+    } catch (error) {
+        console.error('Error loading table data:', error);
+        const tableBody = document.getElementById('database-table-body');
+        if (tableBody) {
+            tableBody.innerHTML = '<tr><td colspan="100%" class="table-loading">Error loading data</td></tr>';
+        }
+        showNotification('Error loading table data', 'error');
+    }
+}
+
+function displayTableData(data, pagination) {
+    const tableHead = document.getElementById('table-header');
+    const tableBody = document.getElementById('table-body');
+    
+    if (!tableHead || !tableBody) {
+        console.error('Table elements not found');
+        return;
+    }
+    
+    // Clear existing content
+    tableHead.innerHTML = '';
+    tableBody.innerHTML = '';
+    
+    if (!data || data.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="100%" class="table-loading">No data found</td></tr>';
+        return;
+    }
+    
+    // Create table headers
+    const headers = Object.keys(data[0]);
+    const headerRow = document.createElement('tr');
+    
+    headers.forEach(header => {
+        const th = document.createElement('th');
+        th.textContent = formatColumnName(header);
+        headerRow.appendChild(th);
+    });
+    
+    tableHead.appendChild(headerRow);
+    
+    // Create table rows
+    data.forEach(row => {
+        const tr = document.createElement('tr');
+        
+        headers.forEach(header => {
+            const td = document.createElement('td');
+            const value = row[header];
+            
+            // Format cell content based on data type and column name
+            formatTableCell(td, header, value);
+            
+            tr.appendChild(td);
+        });
+        
+        tableBody.appendChild(tr);
+    });
+    
+    // Update pagination controls
+    updatePaginationControls(pagination);
+}
+
+function formatColumnName(columnName) {
+    // Convert camelCase and snake_case to readable format
+    return columnName
+        .replace(/([A-Z])/g, ' $1')
+        .replace(/_/g, ' ')
+        .replace(/^./, str => str.toUpperCase())
+        .trim();
+}
+
+function formatTableCell(td, columnName, value) {
+    const lowerColumn = columnName.toLowerCase();
+    
+    // Handle null/undefined values
+    if (value === null || value === undefined) {
+        td.innerHTML = '<span class="bool-null">NULL</span>';
+        return;
+    }
+    
+    // Handle boolean values
+    if (typeof value === 'boolean') {
+        td.innerHTML = `<span class="bool-${value}">${value ? 'TRUE' : 'FALSE'}</span>`;
+        td.classList.add('table-cell-boolean');
+        return;
+    }
+    
+    // Handle ID columns
+    if (lowerColumn.includes('id')) {
+        td.textContent = value;
+        td.classList.add('table-cell-id');
+        return;
+    }
+    
+    // Handle date columns
+    if (lowerColumn.includes('date') || lowerColumn.includes('time') || lowerColumn.includes('created') || lowerColumn.includes('updated')) {
+        if (value) {
+            const date = new Date(value);
+            td.textContent = date.toLocaleString();
+            td.classList.add('table-cell-date');
+        } else {
+            td.textContent = '-';
+        }
+        return;
+    }
+    
+    // Handle file size columns
+    if (lowerColumn.includes('size') && typeof value === 'number') {
+        td.innerHTML = `<span class="file-size">${formatFileSize(value)}</span>`;
+        td.classList.add('table-cell-number');
+        return;
+    }
+    
+    // Handle numeric columns
+    if (typeof value === 'number') {
+        td.textContent = value.toLocaleString();
+        td.classList.add('table-cell-number');
+        return;
+    }
+    
+    // Handle long text content
+    const text = String(value);
+    if (text.length > 50) {
+        td.textContent = text;
+        td.classList.add('table-cell-long-text');
+        td.title = text; // Show full text on hover
+    } else if (text.length > 20) {
+        td.textContent = text;
+        td.classList.add('table-cell-text');
+    } else {
+        td.textContent = text;
+    }
+    
+    // Handle special role columns for users
+    if (lowerColumn === 'role' && currentDatabaseTable === 'user') {
+        if (text.toLowerCase() === 'admin') {
+            td.innerHTML = `<span class="user-admin">ADMIN</span>`;
+        } else {
+            td.innerHTML = `<span class="user-regular">USER</span>`;
+        }
+    }
+}
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function updateTableInfo(tableName, pagination) {
+    const tableInfo = document.getElementById('table-info');
+    if (tableInfo && pagination) {
+        const start = ((pagination.currentPage - 1) * pagination.limit) + 1;
+        const end = Math.min(pagination.currentPage * pagination.limit, pagination.total);
+        tableInfo.textContent = `${formatColumnName(tableName)} Table (${start}-${end} of ${pagination.total} records)`;
+    }
+}
+
+function updatePaginationControls(pagination) {
+    const prevButton = document.getElementById('db-prev-page');
+    const nextButton = document.getElementById('db-next-page');
+    const paginationInfo = document.getElementById('pagination-info');
+    
+    if (prevButton) {
+        prevButton.disabled = !pagination.hasPrev;
+    }
+    
+    if (nextButton) {
+        nextButton.disabled = !pagination.hasNext;
+    }
+    
+    if (paginationInfo) {
+        paginationInfo.textContent = `Page ${pagination.currentPage} of ${pagination.totalPages}`;
+    }
 }
