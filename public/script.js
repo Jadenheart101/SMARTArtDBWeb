@@ -541,6 +541,7 @@ function closeAllModals() {
         'addArtInfoModal',
         'uploadModal',
         'mediaPreviewModal',
+        'replaceMediaModal',
         'renameModal'
     ];
     
@@ -1434,6 +1435,19 @@ function initializeDashboardEventListeners() {
         console.warn('❌ addArtInfoForm not found in DOM');
     }
     
+    // Set up replace media form event listener
+    const replaceForm = document.getElementById('replaceMediaForm');
+    if (replaceForm) {
+        console.log('✅ FORM HANDLER: Found replace form, adding submit listener');
+        replaceForm.addEventListener('submit', async function(e) {
+            console.log('📋 FORM SUBMIT: Replace form submitted');
+            e.preventDefault();
+            await handleReplaceMedia();
+        });
+    } else {
+        console.log('❌ FORM HANDLER: Replace form not found in dashboard!');
+    }
+    
     // Set up any other dashboard-specific event listeners here
     // ...
 }
@@ -1834,9 +1848,14 @@ async function loadAdminMediaGallery() {
                         
                         let mediaPreview = '';
                         if (isImage) {
+                            // Add AGGRESSIVE cache busting - unique timestamp per image plus random number
+                            const uniqueCacheBuster = Date.now() + Math.random() * 1000 + media.id;
+                            const imageUrl = media.file_path.includes('?') ? 
+                                `${media.file_path}&v=${uniqueCacheBuster}&bustcache=${Math.random()}` : 
+                                `${media.file_path}?v=${uniqueCacheBuster}&bustcache=${Math.random()}`;
                             mediaPreview = `
                                 <div class="media-preview">
-                                    <img src="${media.file_path}" alt="${media.file_name}" loading="lazy" class="admin-media-thumbnail" onclick="viewMedia('${media.file_path}')">
+                                    <img src="${imageUrl}" alt="${media.file_name}" loading="lazy" class="admin-media-thumbnail" onclick="viewMedia('${media.file_path}')" onload="this.style.opacity=1" style="opacity:0;transition:opacity 0.3s">
                                 </div>
                             `;
                         } else {
@@ -2107,45 +2126,63 @@ async function adminDeleteMedia(mediaId, fileName) {
 // Show replace media modal
 let currentReplaceMediaId = null;
 async function showReplaceMediaModal(mediaId, fileName, filePath) {
+    console.log('🔄 REPLACE MODAL: showReplaceMediaModal called');
+    console.log('   mediaId:', mediaId, 'type:', typeof mediaId);
+    console.log('   fileName:', fileName);
+    console.log('   filePath:', filePath);
+    
     const currentUser = JSON.parse(localStorage.getItem('currentUser'));
-    if (!currentUser || !currentUser.isAdmin) {
-        showNotification('Admin access required', 'error');
+    if (!currentUser) {
+        console.log('❌ REPLACE MODAL: No current user found');
+        showNotification('Please log in to replace media', 'error');
         return;
     }
-    
+    console.log('✅ REPLACE MODAL: Current user:', currentUser.id, currentUser.UserName);
+
     currentReplaceMediaId = mediaId;
+    console.log('📝 REPLACE MODAL: Set currentReplaceMediaId to:', currentReplaceMediaId);
     
     // Update modal with current media info
+    console.log('🖼️ REPLACE MODAL: Setting preview image src to:', filePath);
     document.getElementById('currentMediaPreview').src = filePath;
     document.getElementById('currentMediaName').textContent = fileName;
+    console.log('📝 REPLACE MODAL: Set media name to:', fileName);
     
-    // Get media usage information
+    // Get media usage information (admin only)
     try {
-        const response = await fetchFromAPI(`/admin/media/${mediaId}/usage`);
-        if (response.success) {
-            const usage = response.data;
-            let usageText = [];
-            
-            if (usage.projects > 0) usageText.push(`${usage.projects} project(s)`);
-            if (usage.artInfo > 0) usageText.push(`${usage.artInfo} art record(s)`);
-            if (usage.cards > 0) usageText.push(`${usage.cards} card(s)`);
-            
-            document.getElementById('currentMediaUsage').textContent = 
-                usageText.length > 0 ? usageText.join(', ') : 'Not used in any projects or art records';
+        if (currentUser.isAdmin) {
+            const response = await fetchFromAPI(`/admin/media/${mediaId}/usage`);
+            if (response.success) {
+                const usage = response.data;
+                let usageText = [];
+                
+                if (usage.projects > 0) usageText.push(`${usage.projects} project(s)`);
+                if (usage.artInfo > 0) usageText.push(`${usage.artInfo} art record(s)`);
+                if (usage.cards > 0) usageText.push(`${usage.cards} card(s)`);
+                
+                document.getElementById('currentMediaUsage').textContent = 
+                    usageText.length > 0 ? usageText.join(', ') : 'Not used in any projects or art records';
+            } else {
+                document.getElementById('currentMediaUsage').textContent = 'Unable to check usage';
+            }
         } else {
-            document.getElementById('currentMediaUsage').textContent = 'Unable to check usage';
+            document.getElementById('currentMediaUsage').textContent = 'Usage information available to admins only';
         }
     } catch (error) {
         console.error('Error checking media usage:', error);
         document.getElementById('currentMediaUsage').textContent = 'Error checking usage';
     }
     
-    // Get owner information
+    // Get owner information (admin only)
     try {
-        const response = await fetchFromAPI(`/admin/media/${mediaId}`);
-        if (response.success && response.data) {
-            document.getElementById('currentMediaOwner').textContent = 
-                response.data.username || response.data.owner_name || 'Unknown';
+        if (currentUser.isAdmin) {
+            const response = await fetchFromAPI(`/admin/media/${mediaId}`);
+            if (response.success && response.data) {
+                document.getElementById('currentMediaOwner').textContent = 
+                    response.data.username || response.data.owner_name || 'Unknown';
+            }
+        } else {
+            document.getElementById('currentMediaOwner').textContent = 'You (Owner)';
         }
     } catch (error) {
         console.error('Error getting media owner:', error);
@@ -2153,37 +2190,36 @@ async function showReplaceMediaModal(mediaId, fileName, filePath) {
     }
     
     // Show modal
+    console.log('👁️ REPLACE MODAL: Showing modal');
     document.getElementById('replaceMediaModal').style.display = 'block';
+    console.log('✅ REPLACE MODAL: Modal displayed');
 }
 
 // Close replace media modal
 function closeReplaceMediaModal() {
+    console.log('❌ REPLACE MODAL: Closing modal');
     document.getElementById('replaceMediaModal').style.display = 'none';
     document.getElementById('replaceMediaForm').reset();
     currentReplaceMediaId = null;
+    console.log('✅ REPLACE MODAL: Modal closed and form reset');
 }
-
-// Handle replace media form submission
-document.addEventListener('DOMContentLoaded', function() {
-    const replaceForm = document.getElementById('replaceMediaForm');
-    if (replaceForm) {
-        replaceForm.addEventListener('submit', async function(e) {
-            e.preventDefault();
-            await handleReplaceMedia();
-        });
-    }
-});
 
 // Replace media file
 async function handleReplaceMedia() {
+    console.log('🔄 REPLACE HANDLER: handleReplaceMedia started');
+    console.log('📝 REPLACE HANDLER: currentReplaceMediaId:', currentReplaceMediaId);
+    
     if (!currentReplaceMediaId) {
+        console.log('❌ REPLACE HANDLER: No media ID selected');
         showNotification('No media selected for replacement', 'error');
         return;
     }
     
     const currentUser = JSON.parse(localStorage.getItem('currentUser'));
-    if (!currentUser || !currentUser.isAdmin) {
-        showNotification('Admin access required', 'error');
+    console.log('👤 REPLACE HANDLER: Current user:', currentUser);
+    if (!currentUser) {
+        console.log('❌ REPLACE HANDLER: No user logged in');
+        showNotification('Please log in to replace media', 'error');
         return;
     }
     
@@ -2194,75 +2230,185 @@ async function handleReplaceMedia() {
     const progressFill = document.getElementById('replaceProgressFill');
     const progressText = document.getElementById('replaceProgressText');
     
+    console.log('📋 REPLACE HANDLER: Form elements found:');
+    console.log('   fileInput:', !!fileInput);
+    console.log('   keepOriginalName:', keepOriginalName);
+    console.log('   replaceBtn:', !!replaceBtn);
+    console.log('   progressDiv:', !!progressDiv);
+    
     if (!fileInput.files[0]) {
+        console.log('❌ REPLACE HANDLER: No file selected');
         showNotification('Please select a file to upload', 'error');
         return;
     }
     
     const file = fileInput.files[0];
+    console.log('📄 REPLACE HANDLER: File selected:');
+    console.log('   name:', file.name);
+    console.log('   type:', file.type);
+    console.log('   size:', file.size);
     
     // Validate file type
     if (!file.type.startsWith('image/')) {
+        console.log('❌ REPLACE HANDLER: Invalid file type:', file.type);
         showNotification('Please select an image file', 'error');
         return;
     }
+    console.log('✅ REPLACE HANDLER: File type validation passed');
     
     try {
         // Show progress
+        console.log('📊 REPLACE HANDLER: Showing progress UI');
         replaceBtn.disabled = true;
         progressDiv.style.display = 'block';
         progressText.textContent = 'Uploading new media...';
         progressFill.style.width = '20%';
         
         // Create form data
+        console.log('📦 REPLACE HANDLER: Creating form data');
         const formData = new FormData();
         formData.append('file', file);
         formData.append('keepOriginalName', keepOriginalName);
         formData.append('originalMediaId', currentReplaceMediaId);
+        console.log('📦 REPLACE HANDLER: FormData created with:');
+        console.log('   file:', file.name);
+        console.log('   keepOriginalName:', keepOriginalName);
+        console.log('   originalMediaId:', currentReplaceMediaId);
+        
+        // Determine endpoint based on user type
+        let endpoint;
+        if (currentUser.isAdmin) {
+            endpoint = `${API_BASE_URL}/admin/media/${currentReplaceMediaId}/replace`;
+            console.log('👑 REPLACE HANDLER: Using admin endpoint:', endpoint);
+        } else {
+            // Use user endpoint and include userId for regular users
+            formData.append('userId', currentUser.id);
+            endpoint = `${API_BASE_URL}/media/${currentReplaceMediaId}/replace`;
+            console.log('👤 REPLACE HANDLER: Using user endpoint:', endpoint);
+            console.log('👤 REPLACE HANDLER: Added userId to formData:', currentUser.id);
+        }
         
         // Upload and replace
-        const response = await fetch(`${API_BASE_URL}/admin/media/${currentReplaceMediaId}/replace`, {
+        console.log('🌐 REPLACE HANDLER: Starting fetch request to:', endpoint);
+        const response = await fetch(endpoint, {
             method: 'POST',
             body: formData
         });
         
+        console.log('📡 REPLACE HANDLER: Fetch response received:');
+        console.log('   status:', response.status);
+        console.log('   statusText:', response.statusText);
+        console.log('   ok:', response.ok);
+        
         if (!response.ok) {
+            console.log('❌ REPLACE HANDLER: HTTP error');
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
         const result = await response.json();
+        console.log('📋 REPLACE HANDLER: Response JSON:', result);
         
         if (result.success) {
+            console.log('✅ REPLACE HANDLER: API replacement successful!');
             progressFill.style.width = '100%';
             progressText.textContent = 'Media replacement completed!';
             
+            console.log('📊 REPLACE HANDLER: Replacement data:', result.data);
             showNotification('Media replaced successfully! All references have been updated.', 'success');
             
-            // Force refresh of any cached images by adding timestamp parameter
+            // AGGRESSIVE cache busting - force reload ALL images
+            console.log('🔄 REPLACE HANDLER: Starting aggressive cache busting');
             const timestamp = Date.now();
-            document.querySelectorAll('img').forEach(img => {
-                if (img.src && img.src.includes(result.data.fileName)) {
-                    img.src = img.src.split('?')[0] + '?v=' + timestamp;
+            
+            // Method 1: Update all existing images with cache busting
+            console.log('🖼️ REPLACE HANDLER: Method 1 - Updating all images with cache busting');
+            const allImages = document.querySelectorAll('img');
+            console.log('🖼️ REPLACE HANDLER: Found', allImages.length, 'images');
+            
+            allImages.forEach((img, index) => {
+                if (img.src && (img.src.includes('/uploads/') || img.src.includes('media'))) {
+                    const oldSrc = img.src;
+                    const cleanUrl = img.src.split('?')[0];
+                    const newSrc = cleanUrl + '?v=' + timestamp + '&bust=' + Math.random();
+                    img.src = newSrc;
+                    console.log(`🖼️ REPLACE HANDLER: Image ${index} updated:`, oldSrc, '→', newSrc);
+                    
+                    // Force reload by changing src twice
+                    setTimeout(() => {
+                        const finalSrc = cleanUrl + '?v=' + (timestamp + 1) + '&bust=' + Math.random();
+                        img.src = finalSrc;
+                        console.log(`🖼️ REPLACE HANDLER: Image ${index} final update:`, finalSrc);
+                    }, 100);
                 }
             });
             
-            // Close modal and refresh gallery
+            // Method 2: Clear browser cache headers for media requests
+            console.log('🗑️ REPLACE HANDLER: Method 2 - Clearing browser caches');
+            if ('caches' in window) {
+                caches.delete('media-cache').then(() => {
+                    console.log('✅ REPLACE HANDLER: Media cache deleted');
+                }).catch(err => {
+                    console.log('⚠️ REPLACE HANDLER: Cache delete failed:', err);
+                });
+            } else {
+                console.log('⚠️ REPLACE HANDLER: Browser cache API not available');
+            }
+            
+            // Method 3: Force refresh the media gallery with delay to ensure backend update
+            console.log('📁 REPLACE HANDLER: Method 3 - Refreshing gallery with delay');
             setTimeout(() => {
-                closeReplaceMediaModal();
+                console.log('📁 REPLACE HANDLER: Delayed gallery refresh starting');
+                if (currentUser.isAdmin) {
+                    console.log('👑 REPLACE HANDLER: Calling loadAdminMediaGallery');
+                    loadAdminMediaGallery();
+                } else {
+                    console.log('👤 REPLACE HANDLER: Calling refreshMediaGallery');
+                    refreshMediaGallery();
+                }
+            }, 200);
+            
+            // Method 4: Also force refresh the media gallery immediately
+            console.log('📁 REPLACE HANDLER: Method 4 - Immediate gallery refresh');
+            if (currentUser.isAdmin) {
+                console.log('👑 REPLACE HANDLER: Immediate loadAdminMediaGallery');
                 loadAdminMediaGallery();
+            } else {
+                console.log('👤 REPLACE HANDLER: Immediate refreshMediaGallery');
+                refreshMediaGallery();
+            }
+            
+            // Close modal and refresh gallery again after delay
+            console.log('⏰ REPLACE HANDLER: Setting up final modal close and refresh');
+            setTimeout(() => {
+                console.log('🔒 REPLACE HANDLER: Final modal close and refresh starting');
+                closeReplaceMediaModal();
+                if (currentUser.isAdmin) {
+                    console.log('👑 REPLACE HANDLER: Final loadAdminMediaGallery');
+                    loadAdminMediaGallery();
+                } else {
+                    console.log('👤 REPLACE HANDLER: Final refreshMediaGallery');
+                    refreshMediaGallery();
+                }
+                console.log('✅ REPLACE HANDLER: Replacement process completed successfully!');
             }, 1500);
             
         } else {
+            console.log('❌ REPLACE HANDLER: API returned failure:', result);
             throw new Error(result.error || 'Failed to replace media');
         }
         
     } catch (error) {
-        console.error('Error replacing media:', error);
+        console.error('💥 REPLACE HANDLER: Error during replacement:', error);
+        console.error('💥 REPLACE HANDLER: Error stack:', error.stack);
         showNotification(`Error replacing media: ${error.message}`, 'error');
         
+        console.log('🔄 REPLACE HANDLER: Resetting UI after error');
         progressDiv.style.display = 'none';
         replaceBtn.disabled = false;
+        console.log('✅ REPLACE HANDLER: UI reset completed');
     }
+    
+    console.log('🏁 REPLACE HANDLER: handleReplaceMedia function ended');
 }
 
 // Refresh all projects (admin function)
@@ -2695,38 +2841,57 @@ async function handleFileUpload(event) {
 
 // Refresh media gallery
 async function refreshMediaGallery() {
+    console.log('📁 GALLERY REFRESH: refreshMediaGallery called');
     const gallery = document.getElementById('media-gallery');
     const currentUser = JSON.parse(localStorage.getItem('currentUser'));
     
-    if (!gallery || !currentUser) return;
+    console.log('📁 GALLERY REFRESH: Elements check:');
+    console.log('   gallery element:', !!gallery);
+    console.log('   currentUser:', currentUser ? currentUser.id : 'null');
     
+    if (!gallery || !currentUser) {
+        console.log('❌ GALLERY REFRESH: Missing gallery or currentUser', { gallery: !!gallery, currentUser: !!currentUser });
+        return;
+    }
+
     try {
+        console.log('🌐 GALLERY REFRESH: Loading media for user', currentUser.id);
         gallery.innerHTML = '<div class="media-loading"><i class="fas fa-spinner fa-spin"></i> Loading media files...</div>';
         
-        const response = await fetch(`${API_BASE_URL}/media/files?userId=${currentUser.id}`);
-        const result = await response.json();
+        const apiUrl = `${API_BASE_URL}/media/files?userId=${currentUser.id}`;
+        console.log('🌐 GALLERY REFRESH: API request to:', apiUrl);
         
+        const response = await fetch(apiUrl);
+        console.log('📡 GALLERY REFRESH: API response:');
+        console.log('   status:', response.status);
+        console.log('   ok:', response.ok);
+        
+        const result = await response.json();
+        console.log('📋 GALLERY REFRESH: API result:', result);
+
         if (result.success) {
+            console.log('✅ GALLERY REFRESH: API success, displaying', result.files.length, 'files');
             displayMediaFiles(result.files);
             updateMediaStats(result.files);
             
             // Ensure media preview modal remains closed after loading media
             const mediaPreviewModal = document.getElementById('mediaPreviewModal');
             if (mediaPreviewModal && mediaPreviewModal.style.display === 'block') {
-                console.log('Force closing media preview modal after gallery refresh');
+                console.log('🔒 GALLERY REFRESH: Closing media preview modal after refresh');
                 mediaPreviewModal.style.display = 'none';
                 document.body.style.overflow = 'auto';
             }
         } else {
+            console.log('❌ GALLERY REFRESH: API failed:', result);
             gallery.innerHTML = '<div class="media-loading">Failed to load media files</div>';
         }
     } catch (error) {
-        console.error('Error loading media:', error);
+        console.error('💥 GALLERY REFRESH: Error loading media:', error);
         gallery.innerHTML = '<div class="media-loading">Error loading media files</div>';
     }
-}
-
-// Global variable to store media files for safe preview access
+    
+    console.log('🏁 GALLERY REFRESH: refreshMediaGallery completed');
+}// Global variable to store media files for safe preview access
 let mediaFilesCache = [];
 
 // Safe preview function that avoids string escaping issues
@@ -2754,20 +2919,24 @@ function previewMediaSafe(fileId) {
 
 // Display media files in gallery
 function displayMediaFiles(files) {
-    console.log('displayMediaFiles called with:', files);
+    console.log('🖼️ DISPLAY MEDIA: displayMediaFiles called with:', files?.length, 'files');
     
     // Cache the files for safe preview access
     mediaFilesCache = files || [];
+    console.log('💾 DISPLAY MEDIA: mediaFilesCache updated with', mediaFilesCache.length, 'files');
     
     const gallery = document.getElementById('media-gallery');
-    
+    console.log('📋 DISPLAY MEDIA: Gallery element:', !!gallery);
+
     if (!files || files.length === 0) {
+        console.log('📭 DISPLAY MEDIA: No files to display');
         gallery.innerHTML = '<div class="media-loading">No media files found. Upload your first file!</div>';
         return;
     }
 
-    gallery.innerHTML = files.map(file => {
-        console.log('Processing file:', file);
+    console.log('🔄 DISPLAY MEDIA: Processing', files.length, 'files for display');
+    gallery.innerHTML = files.map((file, index) => {
+        console.log(`🖼️ DISPLAY MEDIA: Processing file ${index + 1}:`, file);
         
         const isImage = file.mimeType && file.mimeType.startsWith('image/');
         const isVideo = file.mimeType && file.mimeType.startsWith('video/');
@@ -2778,11 +2947,22 @@ function displayMediaFiles(files) {
         let typeBadge = 'FILE';
 
         if (isImage) {
-            thumbnail = `<img src="${file.url}" alt="${file.customName || file.originalName}" loading="lazy">`;
+            // Add AGGRESSIVE cache busting - unique timestamp per image plus random number
+            const uniqueCacheBuster = Date.now() + Math.random() * 1000 + file.id;
+            const imageUrl = file.url.includes('?') ? 
+                `${file.url}&v=${uniqueCacheBuster}&bustcache=${Math.random()}` : 
+                `${file.url}?v=${uniqueCacheBuster}&bustcache=${Math.random()}`;
+            console.log(`🖼️ DISPLAY MEDIA: Image ${index + 1} URL with cache busting:`, imageUrl);
+            thumbnail = `<img src="${imageUrl}" alt="${file.customName || file.originalName}" loading="lazy" onload="this.style.opacity=1; console.log('🖼️ IMAGE LOADED: File ${file.id} image loaded successfully');" style="opacity:0;transition:opacity 0.3s" onerror="console.error('❌ IMAGE ERROR: File ${file.id} failed to load');">`;
             typeIcon = 'fas fa-image';
             typeBadge = 'IMAGE';
         } else if (isVideo) {
-            thumbnail = `<video src="${file.url}" muted></video>`;
+            const uniqueCacheBuster = Date.now() + Math.random() * 1000 + file.id;
+            const videoUrl = file.url.includes('?') ? 
+                `${file.url}&v=${uniqueCacheBuster}&bustcache=${Math.random()}` : 
+                `${file.url}?v=${uniqueCacheBuster}&bustcache=${Math.random()}`;
+            console.log(`🎥 DISPLAY MEDIA: Video ${index + 1} URL with cache busting:`, videoUrl);
+            thumbnail = `<video src="${videoUrl}" muted></video>`;
             typeIcon = 'fas fa-video';
             typeBadge = 'VIDEO';
         } else if (isAudio) {
@@ -2840,6 +3020,9 @@ function displayMediaFiles(files) {
                     <button class="media-action-btn" onclick="event.stopPropagation(); quickRenameSafe('${file.id}')" title="Rename">
                         <i class="fas fa-edit"></i>
                     </button>
+                    <button class="media-action-btn replace-btn" onclick="event.stopPropagation(); showReplaceMediaModal('${file.id}', '${fileName}', '${file.url}')" title="Replace Image">
+                        <i class="fas fa-exchange-alt"></i>
+                    </button>
                     <button class="media-action-btn delete-btn" onclick="event.stopPropagation(); quickDeleteSafe('${file.id}')" title="Delete">
                         <i class="fas fa-trash"></i>
                     </button>
@@ -2847,6 +3030,9 @@ function displayMediaFiles(files) {
             </div>
         `;
     }).join('');
+    
+    console.log('✅ DISPLAY MEDIA: Gallery HTML generated and applied');
+    console.log('🏁 DISPLAY MEDIA: displayMediaFiles completed');
 }
 
 // Safe rename function that avoids string escaping issues

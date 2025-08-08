@@ -51,8 +51,15 @@ if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Serve uploaded files statically
-app.use('/uploads', express.static(uploadsDir));
+// Serve uploaded files statically with cache-busting headers
+app.use('/uploads', express.static(uploadsDir, {
+    setHeaders: (res, path) => {
+        // Disable caching for uploaded files to ensure replacements are shown
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+    }
+}));
 
 // Configure multer for local file uploads
 const storage = multer.diskStorage({
@@ -115,8 +122,17 @@ const upload = multer({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static files from public directory
-app.use(express.static('public'));
+// Serve static files from public directory with cache control for development
+app.use(express.static('public', {
+    setHeaders: (res, path) => {
+        // For development: disable caching of JS/CSS files to ensure updates are loaded
+        if (path.endsWith('.js') || path.endsWith('.css')) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
+        }
+    }
+}));
 
 // CORS middleware (for frontend-backend communication)
 app.use((req, res, next) => {
@@ -173,6 +189,7 @@ app.get('/api', (req, res) => {
       'PUT /api/media/file/:fileId/display-name': 'Update media file display name',
       'DELETE /api/media/file/:fileId': 'Delete media file',
       'GET /api/users/:userId/media': 'Get user media files',
+      'POST /api/media/:mediaId/replace': 'Replace your own media file while preserving references',
       'GET /api/admin/media/all': 'Get all media files for all users (Admin only)',
       'GET /api/admin/media/backup-data': 'Generate backup data with media references (Admin only)',
       'GET /api/admin/media/:mediaId': 'Get specific media file info (Admin only)',
@@ -1732,12 +1749,12 @@ app.get('/api/admin/media/:mediaId/usage', async (req, res) => {
         const mediaFile = mediaResults[0];
         const fileName = mediaFile.file_name;
         
-        // Check usage in different tables (using correct table names)
-        const fileNamePattern = `%${fileName}%`;
+        // Check usage in different tables (using correct table names and relationships)
+        const mediaFileName = mediaFile.file_name;
         
         const [projectResults, artResults] = await Promise.all([
-            executeQuery('SELECT COUNT(*) as count FROM project WHERE FilePath LIKE ?', [fileNamePattern]),
-            executeQuery('SELECT COUNT(*) as count FROM art WHERE artcol = ?', [mediaFile.file_path])
+            executeQuery('SELECT COUNT(*) as count FROM project WHERE image_id = ?', [mediaId]),
+            executeQuery('SELECT COUNT(*) as count FROM art WHERE artcol = ?', [mediaFileName])
         ]);
 
         const projects = projectResults[0].count;
@@ -1809,6 +1826,11 @@ app.get('/api/admin/media/:mediaId', async (req, res) => {
 
 // Admin: Replace media file
 app.post('/api/admin/media/:mediaId/replace', upload.single('file'), async (req, res) => {
+    console.log('=== ADMIN REPLACE MEDIA ENDPOINT CALLED ===');
+    console.log('mediaId:', req.params.mediaId);
+    console.log('body:', req.body);
+    console.log('file:', req.file ? req.file.originalname : 'no file');
+    
     const mediaId = req.params.mediaId;
     const keepOriginalName = req.body.keepOriginalName === 'true';
 
@@ -1856,7 +1878,7 @@ app.post('/api/admin/media/:mediaId/replace', upload.single('file'), async (req,
         
         // Create new file path
         const newFilePath = `/uploads/user_anonymous/images/${newFileName}`;
-        const newFullPath = path.join(__dirname, 'public', newFilePath);
+        const newFullPath = path.join(uploadsDir, 'user_anonymous', 'images', newFileName);
         
         // Move uploaded file to correct location
         const fs = require('fs');
@@ -1877,7 +1899,6 @@ app.post('/api/admin/media/:mediaId/replace', upload.single('file'), async (req,
                     original_name = ?, 
                     file_path = ?, 
                     file_url = ?, 
-                    download_url = ?,
                     mime_type = ?, 
                     file_size = ?,
                     updated_at = CURRENT_TIMESTAMP
@@ -1887,7 +1908,6 @@ app.post('/api/admin/media/:mediaId/replace', upload.single('file'), async (req,
                 req.file.originalname,
                 newFilePath,
                 newFilePath,
-                newFilePath,
                 req.file.mimetype,
                 req.file.size,
                 mediaId
@@ -1895,26 +1915,178 @@ app.post('/api/admin/media/:mediaId/replace', upload.single('file'), async (req,
 
             console.log(`Media record updated: ${originalMedia.file_path} -> ${newFilePath}`);
 
-            // Update all references in projects table (using correct table name 'project')
-            const projectsResult = await executeQuery(`
-                UPDATE project 
-                SET FilePath = ? 
-                WHERE FilePath = ?
-            `, [newFilePath, originalMedia.file_path]);
+            // Note: project table uses image_id foreign key, so no updates needed there
+            // The foreign key relationship will automatically point to the updated media record
             
-            if (projectsResult.affectedRows > 0) {
-                console.log(`Updated ${projectsResult.affectedRows} project references`);
-            }
-
-            // Update all references in art table (using correct table name 'art')
+            // Update references in art table where artcol contains the old filename
+            const oldFileName = originalMedia.file_name;
             const artResult = await executeQuery(`
                 UPDATE art 
                 SET artcol = ? 
                 WHERE artcol = ?
-            `, [newFilePath, originalMedia.file_path]);
+            `, [newFileName, oldFileName]);
             
             if (artResult.affectedRows > 0) {
                 console.log(`Updated ${artResult.affectedRows} art references`);
+            }
+
+            // Delete old file if it exists and is different from new file
+            try {
+                const oldFullPath = path.join(__dirname, 'public', originalMedia.file_path);
+                if (fs.existsSync(oldFullPath) && oldFullPath !== newFullPath) {
+                    fs.unlinkSync(oldFullPath);
+                    console.log('Old file deleted successfully');
+                }
+            } catch (fileErr) {
+                console.warn('Could not delete old file:', fileErr.message);
+                // Continue anyway - new file is uploaded and database is updated
+            }
+
+            res.json({ 
+                success: true, 
+                message: 'Media file replaced successfully. All references have been updated.',
+                data: {
+                    id: mediaId,
+                    fileName: newFileName,
+                    filePath: newFilePath,
+                    originalName: req.file.originalname,
+                    mimeType: req.file.mimetype,
+                    fileSize: req.file.size,
+                    replacedOriginal: originalMedia.file_path
+                }
+            });
+            
+        } catch (fileError) {
+            console.error('Error handling file:', fileError);
+            return res.status(500).json({ 
+                success: false, 
+                error: 'Failed to process uploaded file' 
+            });
+        }
+        
+    } catch (error) {
+        console.error('Database error:', error);
+        return res.status(500).json({ 
+            success: false, 
+            error: 'Database error occurred' 
+        });
+    }
+});
+
+// User: Replace their own media file
+app.post('/api/media/:mediaId/replace', upload.single('file'), async (req, res) => {
+    console.log('=== USER REPLACE MEDIA ENDPOINT CALLED ===');
+    console.log('mediaId:', req.params.mediaId);
+    console.log('body:', req.body);
+    console.log('file:', req.file ? req.file.originalname : 'no file');
+    
+    const mediaId = req.params.mediaId;
+    const keepOriginalName = req.body.keepOriginalName === 'true';
+    const userId = req.body.userId; // Get user ID from request body
+
+    if (!mediaId) {
+        return res.status(400).json({ 
+            success: false, 
+            error: 'Media ID is required' 
+        });
+    }
+
+    if (!userId) {
+        return res.status(400).json({ 
+            success: false, 
+            error: 'User ID is required' 
+        });
+    }
+
+    if (!req.file) {
+        return res.status(400).json({ 
+            success: false, 
+            error: 'No file uploaded' 
+        });
+    }
+
+    try {
+        // Get original media info and verify ownership
+        const originalResults = await executeQuery('SELECT * FROM media_files WHERE id = ? AND user_id = ?', [mediaId, userId]);
+
+        if (originalResults.length === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Media file not found or you do not have permission to replace it' 
+            });
+        }
+
+        const originalMedia = originalResults[0];
+        
+        // Determine new file name
+        let newFileName;
+        if (keepOriginalName) {
+            // Keep original name but with new extension
+            const originalExt = path.extname(originalMedia.file_name);
+            const newExt = path.extname(req.file.originalname);
+            newFileName = originalMedia.file_name.replace(originalExt, newExt);
+        } else {
+            // Use new file's name with timestamp to avoid conflicts
+            const timestamp = Date.now();
+            const ext = path.extname(req.file.originalname);
+            const baseName = path.basename(req.file.originalname, ext);
+            newFileName = `${timestamp}_${baseName}${ext}`;
+        }
+        
+        // Create new file path
+        const newFilePath = `/uploads/user_anonymous/images/${newFileName}`;
+        const newFullPath = path.join(uploadsDir, 'user_anonymous', 'images', newFileName);
+        
+        // Move uploaded file to correct location
+        const fs = require('fs');
+        try {
+            // Ensure directory exists
+            const dir = path.dirname(newFullPath);
+            if (!fs.existsSync(dir)) {
+                fs.mkdirSync(dir, { recursive: true });
+            }
+            
+            // Move file from temp location to final location
+            fs.renameSync(req.file.path, newFullPath);
+            
+            // Update database record
+            await executeQuery(`
+                UPDATE media_files 
+                SET file_name = ?, 
+                    original_name = ?, 
+                    file_path = ?, 
+                    file_url = ?, 
+                    mime_type = ?, 
+                    file_size = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ? AND user_id = ?
+            `, [
+                newFileName,
+                req.file.originalname,
+                newFilePath,
+                newFilePath,
+                req.file.mimetype,
+                req.file.size,
+                mediaId,
+                userId
+            ]);
+
+            console.log(`User media record updated: ${originalMedia.file_path} -> ${newFilePath}`);
+
+            // Note: project table uses image_id foreign key, so no updates needed there
+            // The foreign key relationship will automatically point to the updated media record
+            
+            // Update references in art table where artcol contains the old filename
+            // Note: art table doesn't have UserID column based on schema, so we update by filename only
+            const oldFileName = originalMedia.file_name;
+            const artResult = await executeQuery(`
+                UPDATE art 
+                SET artcol = ? 
+                WHERE artcol = ?
+            `, [newFileName, oldFileName]);
+            
+            if (artResult.affectedRows > 0) {
+                console.log(`Updated ${artResult.affectedRows} art references for user ${userId}`);
             }
 
             // Delete old file if it exists and is different from new file
