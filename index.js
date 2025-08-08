@@ -1832,7 +1832,6 @@ app.post('/api/admin/media/:mediaId/replace', upload.single('file'), async (req,
     console.log('file:', req.file ? req.file.originalname : 'no file');
     
     const mediaId = req.params.mediaId;
-    const keepOriginalName = req.body.keepOriginalName === 'true';
 
     if (!mediaId) {
         return res.status(400).json({ 
@@ -1861,20 +1860,11 @@ app.post('/api/admin/media/:mediaId/replace', upload.single('file'), async (req,
 
         const originalMedia = originalResults[0];
         
-        // Determine new file name
-        let newFileName;
-        if (keepOriginalName) {
-            // Keep original name but with new extension
-            const originalExt = path.extname(originalMedia.file_name);
-            const newExt = path.extname(req.file.originalname);
-            newFileName = originalMedia.file_name.replace(originalExt, newExt);
-        } else {
-            // Use new file's name with timestamp to avoid conflicts
-            const timestamp = Date.now();
-            const ext = path.extname(req.file.originalname);
-            const baseName = path.basename(req.file.originalname, ext);
-            newFileName = `${timestamp}_${baseName}${ext}`;
-        }
+        // Always use new file's name with timestamp to avoid conflicts
+        const timestamp = Date.now();
+        const ext = path.extname(req.file.originalname);
+        const baseName = path.basename(req.file.originalname, ext);
+        const newFileName = `${timestamp}_${baseName}${ext}`;
         
         // Create new file path
         const newFilePath = `/uploads/user_anonymous/images/${newFileName}`;
@@ -1932,13 +1922,26 @@ app.post('/api/admin/media/:mediaId/replace', upload.single('file'), async (req,
 
             // Delete old file if it exists and is different from new file
             try {
-                const oldFullPath = path.join(__dirname, 'public', originalMedia.file_path);
+                // Fix: Don't add 'public' prefix since files are stored directly in uploads/
+                const oldFullPath = path.join(__dirname, originalMedia.file_path);
+                console.log('🗑️ DELETION DEBUG - Old file path:', oldFullPath);
+                console.log('🗑️ DELETION DEBUG - New file path:', newFullPath);
+                console.log('🗑️ DELETION DEBUG - Old file exists:', fs.existsSync(oldFullPath));
+                console.log('🗑️ DELETION DEBUG - Paths different:', oldFullPath !== newFullPath);
+                
                 if (fs.existsSync(oldFullPath) && oldFullPath !== newFullPath) {
                     fs.unlinkSync(oldFullPath);
-                    console.log('Old file deleted successfully');
+                    console.log('✅ Old file deleted successfully:', oldFullPath);
+                } else {
+                    if (!fs.existsSync(oldFullPath)) {
+                        console.log('⚠️ Old file does not exist, skipping deletion:', oldFullPath);
+                    }
+                    if (oldFullPath === newFullPath) {
+                        console.log('⚠️ Old and new paths are the same, skipping deletion');
+                    }
                 }
             } catch (fileErr) {
-                console.warn('Could not delete old file:', fileErr.message);
+                console.warn('❌ Could not delete old file:', fileErr.message);
                 // Continue anyway - new file is uploaded and database is updated
             }
 
@@ -1981,7 +1984,6 @@ app.post('/api/media/:mediaId/replace', upload.single('file'), async (req, res) 
     console.log('file:', req.file ? req.file.originalname : 'no file');
     
     const mediaId = req.params.mediaId;
-    const keepOriginalName = req.body.keepOriginalName === 'true';
     const userId = req.body.userId; // Get user ID from request body
 
     if (!mediaId) {
@@ -2018,20 +2020,11 @@ app.post('/api/media/:mediaId/replace', upload.single('file'), async (req, res) 
 
         const originalMedia = originalResults[0];
         
-        // Determine new file name
-        let newFileName;
-        if (keepOriginalName) {
-            // Keep original name but with new extension
-            const originalExt = path.extname(originalMedia.file_name);
-            const newExt = path.extname(req.file.originalname);
-            newFileName = originalMedia.file_name.replace(originalExt, newExt);
-        } else {
-            // Use new file's name with timestamp to avoid conflicts
-            const timestamp = Date.now();
-            const ext = path.extname(req.file.originalname);
-            const baseName = path.basename(req.file.originalname, ext);
-            newFileName = `${timestamp}_${baseName}${ext}`;
-        }
+        // Always use new file's name with timestamp to avoid conflicts
+        const timestamp = Date.now();
+        const ext = path.extname(req.file.originalname);
+        const baseName = path.basename(req.file.originalname, ext);
+        const newFileName = `${timestamp}_${baseName}${ext}`;
         
         // Create new file path
         const newFilePath = `/uploads/user_anonymous/images/${newFileName}`;
@@ -2091,13 +2084,26 @@ app.post('/api/media/:mediaId/replace', upload.single('file'), async (req, res) 
 
             // Delete old file if it exists and is different from new file
             try {
-                const oldFullPath = path.join(__dirname, 'public', originalMedia.file_path);
+                // Fix: Don't add 'public' prefix since files are stored directly in uploads/
+                const oldFullPath = path.join(__dirname, originalMedia.file_path);
+                console.log('🗑️ USER DELETION DEBUG - Old file path:', oldFullPath);
+                console.log('🗑️ USER DELETION DEBUG - New file path:', newFullPath);
+                console.log('🗑️ USER DELETION DEBUG - Old file exists:', fs.existsSync(oldFullPath));
+                console.log('🗑️ USER DELETION DEBUG - Paths different:', oldFullPath !== newFullPath);
+                
                 if (fs.existsSync(oldFullPath) && oldFullPath !== newFullPath) {
                     fs.unlinkSync(oldFullPath);
-                    console.log('Old file deleted successfully');
+                    console.log('✅ Old file deleted successfully:', oldFullPath);
+                } else {
+                    if (!fs.existsSync(oldFullPath)) {
+                        console.log('⚠️ Old file does not exist, skipping deletion:', oldFullPath);
+                    }
+                    if (oldFullPath === newFullPath) {
+                        console.log('⚠️ Old and new paths are the same, skipping deletion');
+                    }
                 }
             } catch (fileErr) {
-                console.warn('Could not delete old file:', fileErr.message);
+                console.warn('❌ Could not delete old file:', fileErr.message);
                 // Continue anyway - new file is uploaded and database is updated
             }
 

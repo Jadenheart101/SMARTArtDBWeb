@@ -2224,7 +2224,6 @@ async function handleReplaceMedia() {
     }
     
     const fileInput = document.getElementById('replaceMediaFile');
-    const keepOriginalName = document.getElementById('keepOriginalName').checked;
     const replaceBtn = document.getElementById('replaceMediaBtn');
     const progressDiv = document.getElementById('replaceProgress');
     const progressFill = document.getElementById('replaceProgressFill');
@@ -2232,7 +2231,6 @@ async function handleReplaceMedia() {
     
     console.log('📋 REPLACE HANDLER: Form elements found:');
     console.log('   fileInput:', !!fileInput);
-    console.log('   keepOriginalName:', keepOriginalName);
     console.log('   replaceBtn:', !!replaceBtn);
     console.log('   progressDiv:', !!progressDiv);
     
@@ -2268,11 +2266,9 @@ async function handleReplaceMedia() {
         console.log('📦 REPLACE HANDLER: Creating form data');
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('keepOriginalName', keepOriginalName);
         formData.append('originalMediaId', currentReplaceMediaId);
         console.log('📦 REPLACE HANDLER: FormData created with:');
         console.log('   file:', file.name);
-        console.log('   keepOriginalName:', keepOriginalName);
         console.log('   originalMediaId:', currentReplaceMediaId);
         
         // Determine endpoint based on user type
