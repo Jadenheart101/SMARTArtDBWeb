@@ -399,6 +399,55 @@
                       </div>
                   </div>
               </div>
+          </div>
+
+          <!-- Admin User Management Section - Only visible to administrators -->
+          <div class="dashboard-admin-users" id="admin-users-section" style="display: none;">
+              <div class="admin-users-header">
+                  <h3>User Management</h3>
+                  <div class="admin-users-stats">
+                      <div class="stat-item">
+                          <span class="stat-number" id="admin-total-users-count">0</span>
+                          <span class="stat-label">Total Users</span>
+                      </div>
+                      <div class="stat-item">
+                          <span class="stat-number" id="admin-admins-count">0</span>
+                          <span class="stat-label">Administrators</span>
+                      </div>
+                      <div class="stat-item">
+                          <span class="stat-number" id="admin-regular-users-count">0</span>
+                          <span class="stat-label">Regular Users</span>
+                      </div>
+                  </div>
+                  <div class="admin-users-actions">
+                      <button class="btn btn-info" onclick="refreshAdminUsers()">
+                          <i class="fas fa-sync-alt"></i> Refresh
+                      </button>
+                  </div>
+              </div>
+              
+              <div class="admin-users-table-container">
+                  <table class="admin-users-table" id="admin-users-table">
+                      <thead>
+                          <tr>
+                              <th>ID</th>
+                              <th>Username</th>
+                              <th>Role</th>
+                              <th>Projects</th>
+                              <th>Media Files</th>
+                              <th>Created</th>
+                              <th>Actions</th>
+                          </tr>
+                      </thead>
+                      <tbody id="admin-users-table-body">
+                          <tr>
+                              <td colspan="7" class="users-loading">
+                                  <i class="fas fa-spinner fa-spin"></i> Loading users...
+                              </td>
+                          </tr>
+                      </tbody>
+                  </table>
+              </div>
           </div>        <!-- <div class="dashboard-recent">
             <div class="recent-section">
                 <h3>Recent Activity</h3>

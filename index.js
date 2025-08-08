@@ -195,7 +195,11 @@ app.get('/api', (req, res) => {
       'GET /api/admin/media/:mediaId': 'Get specific media file info (Admin only)',
       'GET /api/admin/media/:mediaId/usage': 'Get media usage in projects/art/cards (Admin only)',
       'POST /api/admin/media/:mediaId/replace': 'Replace media file while preserving references (Admin only)',
-      'DELETE /api/admin/media/:mediaId': 'Delete a media file by ID (Admin only)'
+      'DELETE /api/admin/media/:mediaId': 'Delete a media file by ID (Admin only)',
+      'GET /api/admin/users': 'Get all users with stats for user management (Admin only)',
+      'POST /api/admin/users/:userId/promote': 'Promote user to admin (Admin only)',
+      'POST /api/admin/users/:userId/demote': 'Demote admin to regular user (Admin only)',
+      'DELETE /api/admin/users/:userId': 'Delete a regular user and their data (Admin only)'
     }
   });
 });
@@ -1775,6 +1779,224 @@ app.get('/api/admin/media/:mediaId/usage', async (req, res) => {
         res.status(500).json({ 
             success: false, 
             error: 'Error checking media usage' 
+        });
+    }
+});
+
+// Admin: Get all users for user management
+app.get('/api/admin/users', async (req, res) => {
+    try {
+        const users = await executeQuery(`
+            SELECT 
+                UserID, 
+                UserName, 
+                isAdmin,
+                (SELECT COUNT(*) FROM project WHERE user_id = UserID) as projectCount,
+                (SELECT COUNT(*) FROM media_files WHERE user_id = UserID) as mediaCount
+            FROM user 
+            ORDER BY isAdmin DESC, UserID ASC
+        `);
+        
+        res.json({ 
+            success: true, 
+            data: users.map(user => ({
+                id: user.UserID,
+                username: user.UserName,
+                isAdmin: !!user.isAdmin,
+                createdAt: null, // Created date not available in current schema
+                projectCount: user.projectCount || 0,
+                mediaCount: user.mediaCount || 0
+            }))
+        });
+    } catch (error) {
+        console.error('Error fetching users:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Error fetching users' 
+        });
+    }
+});
+
+// Admin: Promote user to admin
+app.post('/api/admin/users/:userId/promote', async (req, res) => {
+    const userId = req.params.userId;
+    
+    if (!userId) {
+        return res.status(400).json({ 
+            success: false, 
+            error: 'User ID is required' 
+        });
+    }
+    
+    try {
+        // Check if user exists
+        const userExists = await executeQuery('SELECT UserID, UserName, isAdmin FROM user WHERE UserID = ?', [userId]);
+        
+        if (userExists.length === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'User not found' 
+            });
+        }
+        
+        const user = userExists[0];
+        
+        if (user.isAdmin) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'User is already an admin' 
+            });
+        }
+        
+        // Promote user to admin
+        await executeQuery('UPDATE user SET isAdmin = 1 WHERE UserID = ?', [userId]);
+        
+        console.log(`👑 Admin promotion: User "${user.UserName}" (ID: ${userId}) promoted to admin`);
+        
+        res.json({ 
+            success: true, 
+            message: `User "${user.UserName}" has been promoted to admin`,
+            data: {
+                id: user.UserID,
+                username: user.UserName,
+                isAdmin: true
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error promoting user:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Error promoting user to admin' 
+        });
+    }
+});
+
+// Admin: Demote admin to regular user  
+app.post('/api/admin/users/:userId/demote', async (req, res) => {
+    const userId = req.params.userId;
+    
+    if (!userId) {
+        return res.status(400).json({ 
+            success: false, 
+            error: 'User ID is required' 
+        });
+    }
+    
+    try {
+        // Check if user exists
+        const userExists = await executeQuery('SELECT UserID, UserName, isAdmin FROM user WHERE UserID = ?', [userId]);
+        
+        if (userExists.length === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'User not found' 
+            });
+        }
+        
+        const user = userExists[0];
+        
+        if (!user.isAdmin) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'User is not an admin' 
+            });
+        }
+        
+        // Check if this is the last admin
+        const adminCount = await executeQuery('SELECT COUNT(*) as count FROM user WHERE isAdmin = 1');
+        if (adminCount[0].count <= 1) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Cannot demote the last admin user' 
+            });
+        }
+        
+        // Demote admin to regular user
+        await executeQuery('UPDATE user SET isAdmin = 0 WHERE UserID = ?', [userId]);
+        
+        console.log(`👤 Admin demotion: User "${user.UserName}" (ID: ${userId}) demoted to regular user`);
+        
+        res.json({ 
+            success: true, 
+            message: `User "${user.UserName}" has been demoted to regular user`,
+            data: {
+                id: user.UserID,
+                username: user.UserName,
+                isAdmin: false
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error demoting user:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Error demoting user' 
+        });
+    }
+});
+
+// Admin: Delete user (with safety checks)
+app.delete('/api/admin/users/:userId', async (req, res) => {
+    const userId = req.params.userId;
+    
+    if (!userId) {
+        return res.status(400).json({ 
+            success: false, 
+            error: 'User ID is required' 
+        });
+    }
+    
+    try {
+        // Check if user exists
+        const userExists = await executeQuery('SELECT UserID, UserName, isAdmin FROM user WHERE UserID = ?', [userId]);
+        
+        if (userExists.length === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'User not found' 
+            });
+        }
+        
+        const user = userExists[0];
+        
+        // Prevent deleting admin users through this endpoint
+        if (user.isAdmin) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Cannot delete admin users. Please demote to regular user first.' 
+            });
+        }
+        
+        // Delete user's projects first
+        const projectCount = await executeQuery('SELECT COUNT(*) as count FROM project WHERE user_id = ?', [userId]);
+        if (projectCount[0].count > 0) {
+            await executeQuery('DELETE FROM project WHERE user_id = ?', [userId]);
+            console.log(`🗑️ Deleted ${projectCount[0].count} project(s) for user ${user.UserName}`);
+        }
+        
+        // Delete user's media files from database (files will be cleaned up separately)
+        const mediaCount = await executeQuery('SELECT COUNT(*) as count FROM media_files WHERE user_id = ?', [userId]);
+        if (mediaCount[0].count > 0) {
+            await executeQuery('DELETE FROM media_files WHERE user_id = ?', [userId]);
+            console.log(`🗑️ Deleted ${mediaCount[0].count} media record(s) for user ${user.UserName}`);
+        }
+        
+        // Delete user
+        await executeQuery('DELETE FROM user WHERE UserID = ?', [userId]);
+        
+        console.log(`🗑️ Admin deleted user: "${user.UserName}" (ID: ${userId})`);
+        
+        res.json({ 
+            success: true, 
+            message: `User "${user.UserName}" has been deleted along with ${projectCount[0].count} project(s) and ${mediaCount[0].count} media file(s)`
+        });
+        
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Error deleting user' 
         });
     }
 });

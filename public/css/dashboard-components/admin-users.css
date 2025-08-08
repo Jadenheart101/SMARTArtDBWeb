@@ -1,0 +1,263 @@
+/* Admin User Management Styles */
+.dashboard-admin-users {
+    background: white;
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    margin-bottom: 2rem;
+}
+
+.admin-users-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.admin-users-header h3 {
+    margin: 0;
+    color: #333;
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.admin-users-header h3:before {
+    content: '👥';
+    font-size: 1.2rem;
+}
+
+.admin-users-stats {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+}
+
+.admin-users-stats .stat-item {
+    text-align: center;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    min-width: 120px;
+}
+
+.admin-users-stats .stat-number {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #6366f1;
+    margin-bottom: 0.25rem;
+}
+
+.admin-users-stats .stat-label {
+    font-size: 0.9rem;
+    color: #64748b;
+}
+
+.admin-users-actions {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+}
+
+.admin-users-table-container {
+    overflow-x: auto;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.admin-users-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.admin-users-table th,
+.admin-users-table td {
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.admin-users-table th {
+    background: #f8f9fa;
+    font-weight: 600;
+    color: #475569;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.admin-users-table tr:hover {
+    background: #f8f9fa;
+}
+
+.admin-users-table .users-loading {
+    text-align: center;
+    padding: 2rem;
+    color: #64748b;
+}
+
+.user-role-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.user-role-badge.admin {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.user-role-badge.user {
+    background: #e0f2fe;
+    color: #0369a1;
+}
+
+.user-role-badge.admin:before {
+    content: '👑';
+}
+
+.user-role-badge.user:before {
+    content: '👤';
+}
+
+.user-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.user-actions .btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    transition: all 0.2s ease;
+}
+
+.user-actions .btn-promote {
+    background: #10b981;
+    color: white;
+}
+
+.user-actions .btn-promote:hover {
+    background: #059669;
+}
+
+.user-actions .btn-demote {
+    background: #f59e0b;
+    color: white;
+}
+
+.user-actions .btn-demote:hover {
+    background: #d97706;
+}
+
+.user-actions .btn-delete {
+    background: #ef4444;
+    color: white;
+}
+
+.user-actions .btn-delete:hover {
+    background: #dc2626;
+}
+
+.user-actions .btn:disabled {
+    background: #94a3b8;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.user-stats {
+    font-size: 0.9rem;
+    color: #64748b;
+}
+
+.user-created-date {
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .admin-users-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .admin-users-stats {
+        justify-content: space-between;
+    }
+    
+    .admin-users-stats .stat-item {
+        flex: 1;
+        min-width: auto;
+    }
+    
+    .admin-users-table-container {
+        font-size: 0.8rem;
+    }
+    
+    .admin-users-table th,
+    .admin-users-table td {
+        padding: 0.75rem 0.5rem;
+    }
+    
+    .user-actions {
+        flex-direction: column;
+    }
+    
+    .user-actions .btn {
+        justify-content: center;
+        width: 100%;
+    }
+}
+
+/* Loading and empty states */
+.users-loading,
+.users-empty {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: #64748b;
+}
+
+.users-empty .fas {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+/* Animation for table rows */
+.admin-users-table tbody tr {
+    opacity: 0;
+    animation: fadeInUp 0.3s ease forwards;
+}
+
+.admin-users-table tbody tr:nth-child(1) { animation-delay: 0.1s; }
+.admin-users-table tbody tr:nth-child(2) { animation-delay: 0.2s; }
+.admin-users-table tbody tr:nth-child(3) { animation-delay: 0.3s; }
+.admin-users-table tbody tr:nth-child(4) { animation-delay: 0.4s; }
+.admin-users-table tbody tr:nth-child(5) { animation-delay: 0.5s; }
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

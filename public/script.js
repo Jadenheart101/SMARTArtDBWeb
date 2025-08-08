@@ -1626,15 +1626,20 @@ async function loadDashboardData() {
     if (currentUser.isAdmin) {
         loadAdminProjects();
         loadAdminMediaGallery();
+        loadAdminUsers();
     } else {
         // Hide admin sections for regular users
         const adminProjectsSection = document.getElementById('admin-projects-section');
         const adminMediaSection = document.getElementById('admin-media-section');
+        const adminUsersSection = document.getElementById('admin-users-section');
         if (adminProjectsSection) {
             adminProjectsSection.style.display = 'none';
         }
         if (adminMediaSection) {
             adminMediaSection.style.display = 'none';
+        }
+        if (adminUsersSection) {
+            adminUsersSection.style.display = 'none';
         }
     }
     
@@ -4943,4 +4948,228 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// Admin User Management Functions
+async function loadAdminUsers() {
+    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    if (!currentUser || !currentUser.isAdmin) {
+        console.warn('Admin access required for user management');
+        return;
+    }
+    
+    const adminUsersSection = document.getElementById('admin-users-section');
+    const tableBody = document.getElementById('admin-users-table-body');
+    const totalUsersElement = document.getElementById('admin-total-users-count');
+    const adminsCountElement = document.getElementById('admin-admins-count');
+    const regularUsersCountElement = document.getElementById('admin-regular-users-count');
+    
+    // Show admin section
+    if (adminUsersSection) {
+        adminUsersSection.style.display = 'block';
+    }
+    
+    try {
+        const response = await fetchFromAPI('/admin/users');
+        
+        if (response.success && response.data) {
+            const users = response.data;
+            
+            // Update statistics
+            const totalUsers = users.length;
+            const admins = users.filter(user => user.isAdmin);
+            const regularUsers = users.filter(user => !user.isAdmin);
+            
+            if (totalUsersElement) totalUsersElement.textContent = totalUsers;
+            if (adminsCountElement) adminsCountElement.textContent = admins.length;
+            if (regularUsersCountElement) regularUsersCountElement.textContent = regularUsers.length;
+            
+            // Display users in table
+            if (tableBody) {
+                if (users.length === 0) {
+                    tableBody.innerHTML = `
+                        <tr>
+                            <td colspan="7" class="users-empty">
+                                <i class="fas fa-users"></i>
+                                <p>No users found</p>
+                            </td>
+                        </tr>
+                    `;
+                } else {
+                    tableBody.innerHTML = users.map(user => {
+                        const createdDate = user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown';
+                        const roleClass = user.isAdmin ? 'admin' : 'user';
+                        const roleName = user.isAdmin ? 'Administrator' : 'User';
+                        
+                        return `
+                            <tr>
+                                <td>${user.id}</td>
+                                <td><strong>${escapeHtml(user.username)}</strong></td>
+                                <td>
+                                    <span class="user-role-badge ${roleClass}">
+                                        ${roleName}
+                                    </span>
+                                </td>
+                                <td class="user-stats">${user.projectCount}</td>
+                                <td class="user-stats">${user.mediaCount}</td>
+                                <td class="user-created-date">${createdDate}</td>
+                                <td>
+                                    <div class="user-actions">
+                                        ${generateUserActions(user)}
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
+                }
+            }
+        } else {
+            if (tableBody) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="users-empty">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <p>Failed to load users</p>
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+        
+    } catch (error) {
+        console.error('Error loading admin users:', error);
+        if (tableBody) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="users-empty">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p>Error loading users</p>
+                    </td>
+                </tr>
+            `;
+        }
+    }
+}
+
+function generateUserActions(user) {
+    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    const isCurrentUser = currentUser && currentUser.id === user.id;
+    
+    let actions = [];
+    
+    if (!user.isAdmin) {
+        // Regular user - can be promoted to admin
+        actions.push(`
+            <button class="btn btn-promote" onclick="promoteUserToAdmin(${user.id}, '${escapeHtml(user.username)}')" 
+                    ${isCurrentUser ? 'disabled title="Cannot promote yourself"' : ''}>
+                <i class="fas fa-crown"></i> Promote
+            </button>
+        `);
+        
+        // Regular user - can be deleted (but not current user)
+        actions.push(`
+            <button class="btn btn-delete" onclick="deleteUser(${user.id}, '${escapeHtml(user.username)}')"
+                    ${isCurrentUser ? 'disabled title="Cannot delete yourself"' : ''}>
+                <i class="fas fa-trash"></i> Delete
+            </button>
+        `);
+    } else {
+        // Admin user - can be demoted (but not if it's the last admin or current user)
+        actions.push(`
+            <button class="btn btn-demote" onclick="demoteAdminToUser(${user.id}, '${escapeHtml(user.username)}')"
+                    ${isCurrentUser ? 'disabled title="Cannot demote yourself"' : ''}>
+                <i class="fas fa-user-minus"></i> Demote
+            </button>
+        `);
+    }
+    
+    return actions.join('');
+}
+
+async function promoteUserToAdmin(userId, username) {
+    const confirmed = confirm(`Are you sure you want to promote "${username}" to administrator?\n\nThis will give them full access to all admin features.`);
+    if (!confirmed) return;
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/admin/users/${userId}/promote`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification(`Successfully promoted "${username}" to administrator`, 'success');
+            loadAdminUsers(); // Refresh the user list
+        } else {
+            showNotification(result.error || 'Failed to promote user', 'error');
+        }
+    } catch (error) {
+        console.error('Error promoting user:', error);
+        showNotification('Error occurred while promoting user', 'error');
+    }
+}
+
+async function demoteAdminToUser(userId, username) {
+    const confirmed = confirm(`Are you sure you want to demote "${username}" from administrator to regular user?\n\nThis will remove their admin privileges.`);
+    if (!confirmed) return;
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/admin/users/${userId}/demote`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification(`Successfully demoted "${username}" to regular user`, 'success');
+            loadAdminUsers(); // Refresh the user list
+        } else {
+            showNotification(result.error || 'Failed to demote user', 'error');
+        }
+    } catch (error) {
+        console.error('Error demoting user:', error);
+        showNotification('Error occurred while demoting user', 'error');
+    }
+}
+
+async function deleteUser(userId, username) {
+    const confirmed = confirm(`Are you sure you want to delete user "${username}"?\n\nThis will permanently delete:\n- The user account\n- All their projects\n- All their media files\n\nThis action cannot be undone.`);
+    if (!confirmed) return;
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/admin/users/${userId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification(result.message || `Successfully deleted user "${username}"`, 'success');
+            loadAdminUsers(); // Refresh the user list
+        } else {
+            showNotification(result.error || 'Failed to delete user', 'error');
+        }
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        showNotification('Error occurred while deleting user', 'error');
+    }
+}
+
+function refreshAdminUsers() {
+    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    if (!currentUser || !currentUser.isAdmin) {
+        showNotification('Admin access required', 'error');
+        return;
+    }
+    
+    loadAdminUsers();
 }
