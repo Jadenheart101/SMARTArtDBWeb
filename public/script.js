@@ -1971,7 +1971,7 @@ function refreshAdminMediaGallery() {
     loadAdminMediaGallery();
 }
 
-// Download all media files and backup JSON
+// Download all media files and backup JSON as ZIP
 async function downloadAllMedia() {
     const currentUser = JSON.parse(localStorage.getItem('currentUser'));
     if (!currentUser || !currentUser.isAdmin) {
@@ -1984,59 +1984,29 @@ async function downloadAllMedia() {
     
     try {
         // Show loading state
-        downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing Download...';
+        downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing ZIP...';
         downloadBtn.disabled = true;
         
-        // Get backup data
-        const response = await fetchFromAPI('/admin/media/backup-data');
+        // Create ZIP download URL
+        const zipUrl = '/api/admin/media/download-zip';
         
-        if (response.success && response.data) {
-            // Create and download backup JSON
-            const backupData = response.data;
-            const jsonBlob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-            const jsonUrl = URL.createObjectURL(jsonBlob);
-            
-            const jsonLink = document.createElement('a');
-            jsonLink.href = jsonUrl;
-            jsonLink.download = `media-backup-${new Date().toISOString().split('T')[0]}.json`;
-            document.body.appendChild(jsonLink);
-            jsonLink.click();
-            document.body.removeChild(jsonLink);
-            URL.revokeObjectURL(jsonUrl);
-            
-            // Download each media file
-            for (const media of backupData.mediaFiles) {
-                try {
-                    const mediaResponse = await fetch(media.fileUrl || media.filePath);
-                    if (mediaResponse.ok) {
-                        const blob = await mediaResponse.blob();
-                        const url = URL.createObjectURL(blob);
-                        
-                        const link = document.createElement('a');
-                        link.href = url;
-                        link.download = media.fileName;
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                        URL.revokeObjectURL(url);
-                        
-                        // Small delay to prevent overwhelming the browser
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                    }
-                } catch (fileError) {
-                    console.error(`Error downloading ${media.fileName}:`, fileError);
-                }
-            }
-            
-            showNotification(`Successfully downloaded ${backupData.mediaFiles.length} media files and backup JSON`, 'success');
-            
-        } else {
-            showNotification('Failed to prepare backup data', 'error');
-        }
+        // Create invisible link to trigger download
+        const link = document.createElement('a');
+        link.href = zipUrl;
+        link.style.display = 'none';
+        
+        // Add the link to the body and click it
+        document.body.appendChild(link);
+        link.click();
+        
+        // Clean up
+        document.body.removeChild(link);
+        
+        showNotification('ZIP download started! Check your downloads folder.', 'success');
         
     } catch (error) {
-        console.error('Error downloading media:', error);
-        showNotification('Error occurred during download', 'error');
+        console.error('Error downloading media ZIP:', error);
+        showNotification('Error occurred during ZIP download', 'error');
     } finally {
         // Restore button state
         downloadBtn.innerHTML = originalText;

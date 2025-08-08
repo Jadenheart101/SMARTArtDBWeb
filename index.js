@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const archiver = require('archiver');
 const { testConnection, executeQuery } = require('./database');
 require('dotenv').config();
 
@@ -261,6 +262,7 @@ app.get('/api', (req, res) => {
       'POST /api/media/:mediaId/replace': 'Replace your own media file while preserving references',
       'GET /api/admin/media/all': 'Get all media files for all users (Admin only)',
       'GET /api/admin/media/backup-data': 'Generate backup data with media references (Admin only)',
+      'GET /api/admin/media/download-zip': 'Download all media files and backup data as ZIP (Admin only)',
       'GET /api/admin/media/:mediaId': 'Get specific media file info (Admin only)',
       'GET /api/admin/media/:mediaId/usage': 'Get media usage in projects/art/cards (Admin only)',
       'POST /api/admin/media/:mediaId/replace': 'Replace media file while preserving references (Admin only)',
@@ -2142,6 +2144,129 @@ app.get('/api/admin/media/backup-data', async (req, res) => {
   } catch (error) {
     console.error('Error generating backup data:', error);
     res.status(500).json({ success: false, message: 'Error generating backup data', error: error.message });
+  }
+});
+
+// Download all media files as ZIP (Admin only)
+app.get('/api/admin/media/download-zip', async (req, res) => {
+  try {
+    // Get all media files
+    const files = await executeQuery(`
+      SELECT 
+        mf.*,
+        u.UserName as owner_name,
+        p.ProjectID as linked_project_id,
+        p.ProjectName as linked_project_name
+      FROM media_files mf
+      LEFT JOIN user u ON mf.user_id = u.UserID
+      LEFT JOIN project p ON p.image_id = mf.id
+      ORDER BY mf.created_at DESC
+    `);
+    
+    // Get art info linked to media files
+    const artInfo = await executeQuery(`
+      SELECT 
+        a.*,
+        mf.file_name,
+        mf.original_name,
+        u.UserName as owner_name
+      FROM art a
+      LEFT JOIN media_files mf ON a.artcol = mf.file_name
+      LEFT JOIN user u ON mf.user_id = u.UserID
+      WHERE mf.file_name IS NOT NULL
+    `);
+    
+    // Create backup JSON
+    const backupData = {
+      generatedAt: new Date().toISOString(),
+      version: "1.0",
+      description: "SMARTArt Database Media Backup Reference File",
+      mediaFiles: files.map(file => ({
+        id: file.id,
+        fileName: file.file_name,
+        originalName: file.original_name,
+        displayName: file.displayName,
+        filePath: file.file_path,
+        fileUrl: file.file_url,
+        mimeType: file.mime_type,
+        fileSize: file.file_size,
+        userId: file.user_id,
+        ownerName: file.owner_name,
+        createdAt: file.created_at,
+        updatedAt: file.updated_at,
+        linkedProjects: file.linked_project_id ? [{
+          projectId: file.linked_project_id,
+          projectName: file.linked_project_name
+        }] : []
+      })),
+      artInformation: artInfo.map(art => ({
+        artId: art.ArtId,
+        artistName: art.ArtistName,
+        artName: art.ArtName,
+        artMedia: art.ArtMedia,
+        submitor: art.Submitor,
+        date: art.Date,
+        linkedMediaFile: art.artcol,
+        mediaOwner: art.owner_name,
+        createdAt: art.created_at,
+        updatedAt: art.updated_at
+      })),
+      restoreInstructions: {
+        mediaFiles: "Upload files to their original paths or update file_path/file_url in database",
+        projects: "Update project.ImageURL to point to restored media files",
+        artInfo: "Ensure art.artcol matches the restored media file names"
+      }
+    };
+    
+    // Set response headers for ZIP download
+    const zipFilename = `media-backup-${new Date().toISOString().split('T')[0]}.zip`;
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${zipFilename}"`);
+    
+    // Create ZIP archive
+    const archive = archiver('zip', {
+      zlib: { level: 9 } // Best compression
+    });
+    
+    // Handle archive errors
+    archive.on('error', (err) => {
+      console.error('Archive error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: 'Error creating ZIP file' });
+      }
+    });
+    
+    // Pipe archive to response
+    archive.pipe(res);
+    
+    // Add backup JSON to archive
+    archive.append(JSON.stringify(backupData, null, 2), { name: 'backup-data.json' });
+    
+    // Add each media file to the archive
+    for (const file of files) {
+      try {
+        const absolutePath = path.join(__dirname, file.file_path);
+        if (fs.existsSync(absolutePath)) {
+          archive.file(absolutePath, { name: `media/${file.file_name}` });
+        } else {
+          console.warn(`File not found: ${absolutePath}`);
+          // Add a note about missing file
+          archive.append(`File not found: ${file.file_name}`, { name: `missing-files/${file.file_name}.txt` });
+        }
+      } catch (fileError) {
+        console.error(`Error adding file ${file.file_name} to archive:`, fileError);
+        archive.append(`Error reading file: ${fileError.message}`, { name: `error-files/${file.file_name}.txt` });
+      }
+    }
+    
+    // Finalize the archive
+    archive.finalize();
+    
+  } catch (error) {
+    console.error('Error creating media ZIP:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: 'Error creating media ZIP file', error: error.message });
+    }
   }
 });
 
