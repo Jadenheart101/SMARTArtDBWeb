@@ -1793,6 +1793,211 @@ app.get('/api/admin/database/stats', async (req, res) => {
     }
 });
 
+// Scan for orphaned records in a specific table (Admin only)
+app.get('/api/admin/database/orphaned/:tableName', async (req, res) => {
+    try {
+        const { tableName } = req.params;
+        const allowedTables = ['project', 'media_files', 'card', 'poi', 'art', 'project_topics'];
+        
+        if (!allowedTables.includes(tableName)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid table name or table cleanup not allowed'
+            });
+        }
+
+        let orphanedRecords = [];
+        
+        switch (tableName) {
+            case 'project':
+                // Projects with invalid user_id or image_id
+                orphanedRecords = await executeQuery(`
+                    SELECT p.*, 'Invalid user_id' as reason
+                    FROM project p 
+                    LEFT JOIN user u ON p.user_id = u.UserID 
+                    WHERE u.UserID IS NULL
+                    UNION ALL
+                    SELECT p.*, 'Invalid image_id' as reason
+                    FROM project p 
+                    LEFT JOIN media_files m ON p.image_id = m.id 
+                    WHERE p.image_id IS NOT NULL AND m.id IS NULL
+                `);
+                break;
+                
+            case 'media_files':
+                // Media files with invalid user_id
+                orphanedRecords = await executeQuery(`
+                    SELECT m.*, 'Invalid user_id' as reason
+                    FROM media_files m 
+                    LEFT JOIN user u ON m.user_id = u.UserID 
+                    WHERE u.UserID IS NULL
+                `);
+                break;
+                
+            case 'card':
+                // Cards with invalid poi_id
+                orphanedRecords = await executeQuery(`
+                    SELECT c.*, 'Invalid poi_id' as reason
+                    FROM card c 
+                    LEFT JOIN poi p ON c.poi_id = p.id 
+                    WHERE p.id IS NULL
+                `);
+                break;
+                
+            case 'poi':
+                // POIs with invalid topic_id
+                orphanedRecords = await executeQuery(`
+                    SELECT p.*, 'Invalid topic_id' as reason
+                    FROM poi p 
+                    LEFT JOIN project_topics pt ON p.topic_id = pt.id 
+                    WHERE pt.id IS NULL
+                `);
+                break;
+                
+            case 'art':
+                // Art records with invalid ArtMedia references
+                orphanedRecords = await executeQuery(`
+                    SELECT a.*, 'Invalid ArtMedia reference' as reason
+                    FROM art a 
+                    LEFT JOIN media_files m ON a.ArtMedia = m.filename 
+                    WHERE m.filename IS NULL AND a.ArtMedia IS NOT NULL AND a.ArtMedia != ''
+                `);
+                break;
+                
+            case 'project_topics':
+                // Project topics with invalid project_id
+                orphanedRecords = await executeQuery(`
+                    SELECT pt.*, 'Invalid project_id' as reason
+                    FROM project_topics pt 
+                    LEFT JOIN project p ON pt.project_id = p.ProjectID 
+                    WHERE p.ProjectID IS NULL
+                `);
+                break;
+        }
+
+        res.json({
+            success: true,
+            data: {
+                tableName,
+                orphanedCount: orphanedRecords.length,
+                orphanedRecords: orphanedRecords.slice(0, 100) // Limit to first 100 for display
+            }
+        });
+        
+    } catch (error) {
+        console.error('Orphaned records scan error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to scan for orphaned records',
+            details: error.message
+        });
+    }
+});
+
+// Clean up orphaned records in a specific table (Admin only)
+app.delete('/api/admin/database/orphaned/:tableName', async (req, res) => {
+    try {
+        const { tableName } = req.params;
+        const allowedTables = ['project', 'media_files', 'card', 'poi', 'art', 'project_topics'];
+        
+        if (!allowedTables.includes(tableName)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid table name or table cleanup not allowed'
+            });
+        }
+
+        let deletedCount = 0;
+        
+        switch (tableName) {
+            case 'project':
+                // Delete projects with invalid user_id
+                const invalidUserProjects = await executeQuery(`
+                    DELETE p FROM project p 
+                    LEFT JOIN user u ON p.user_id = u.UserID 
+                    WHERE u.UserID IS NULL
+                `);
+                
+                // Delete projects with invalid image_id
+                const invalidImageProjects = await executeQuery(`
+                    DELETE p FROM project p 
+                    LEFT JOIN media_files m ON p.image_id = m.id 
+                    WHERE p.image_id IS NOT NULL AND m.id IS NULL
+                `);
+                
+                deletedCount = invalidUserProjects.affectedRows + invalidImageProjects.affectedRows;
+                break;
+                
+            case 'media_files':
+                // Delete media files with invalid user_id
+                const result = await executeQuery(`
+                    DELETE m FROM media_files m 
+                    LEFT JOIN user u ON m.user_id = u.UserID 
+                    WHERE u.UserID IS NULL
+                `);
+                deletedCount = result.affectedRows;
+                break;
+                
+            case 'card':
+                // Delete cards with invalid poi_id
+                const cardResult = await executeQuery(`
+                    DELETE c FROM card c 
+                    LEFT JOIN poi p ON c.poi_id = p.id 
+                    WHERE p.id IS NULL
+                `);
+                deletedCount = cardResult.affectedRows;
+                break;
+                
+            case 'poi':
+                // Delete POIs with invalid topic_id
+                const poiResult = await executeQuery(`
+                    DELETE p FROM poi p 
+                    LEFT JOIN project_topics pt ON p.topic_id = pt.id 
+                    WHERE pt.id IS NULL
+                `);
+                deletedCount = poiResult.affectedRows;
+                break;
+                
+            case 'art':
+                // Delete art records with invalid ArtMedia references
+                const artResult = await executeQuery(`
+                    DELETE a FROM art a 
+                    LEFT JOIN media_files m ON a.ArtMedia = m.filename 
+                    WHERE m.filename IS NULL AND a.ArtMedia IS NOT NULL AND a.ArtMedia != ''
+                `);
+                deletedCount = artResult.affectedRows;
+                break;
+                
+            case 'project_topics':
+                // Delete project topics with invalid project_id
+                const topicsResult = await executeQuery(`
+                    DELETE pt FROM project_topics pt 
+                    LEFT JOIN project p ON pt.project_id = p.ProjectID 
+                    WHERE p.ProjectID IS NULL
+                `);
+                deletedCount = topicsResult.affectedRows;
+                break;
+        }
+
+        res.json({
+            success: true,
+            data: {
+                tableName,
+                deletedCount,
+                message: `Cleaned up ${deletedCount} orphaned records from ${tableName} table`
+            }
+        });
+        
+    } catch (error) {
+        console.error('Orphaned records cleanup error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to clean up orphaned records',
+            details: error.message
+        });
+    }
+});
+
 // ========== ADMIN MEDIA ENDPOINTS ==========
 
 // Get all media files for all users (Admin only)

@@ -5410,6 +5410,9 @@ function initializeDatabaseManagement() {
             loadDatabaseTable(currentDatabaseTable);
         });
     }
+    
+    // Initialize table actions visibility
+    updateTableActionsVisibility();
 }
 
 async function loadDatabaseStats() {
@@ -5470,6 +5473,9 @@ function switchDatabaseTable(tableName) {
     // Reset pagination
     currentDatabaseTable = tableName;
     currentDatabasePage = 1;
+    
+    // Update table actions visibility
+    updateTableActionsVisibility();
     
     // Load the table data
     loadDatabaseTable(tableName);
@@ -5677,5 +5683,151 @@ function updatePaginationControls(pagination) {
     
     if (paginationInfo) {
         paginationInfo.textContent = `Page ${pagination.currentPage} of ${pagination.totalPages}`;
+    }
+}
+
+// ============================
+// Database Cleanup Functions
+// ============================
+
+let currentOrphanedRecords = [];
+
+async function scanOrphanedRecords() {
+    if (currentDatabaseTable === 'user') {
+        showNotification('User table cleanup is not allowed for safety reasons', 'warning');
+        return;
+    }
+    
+    try {
+        console.log('Scanning for orphaned records in table:', currentDatabaseTable);
+        
+        // Show loading state
+        const scanButton = document.getElementById('scan-orphaned-btn');
+        const cleanupButton = document.getElementById('cleanup-orphaned-btn');
+        
+        if (scanButton) {
+            scanButton.disabled = true;
+            scanButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Scanning...';
+        }
+        
+        if (cleanupButton) {
+            cleanupButton.style.display = 'none';
+        }
+        
+        const response = await fetch(`/api/admin/database/orphaned/${currentDatabaseTable}`);
+        const result = await response.json();
+        
+        if (result.success) {
+            currentOrphanedRecords = result.data.orphanedRecords;
+            
+            if (result.data.orphanedCount > 0) {
+                showNotification(`Found ${result.data.orphanedCount} orphaned records in ${currentDatabaseTable} table`, 'warning');
+                
+                if (cleanupButton) {
+                    cleanupButton.style.display = 'inline-block';
+                    cleanupButton.innerHTML = `<i class="fas fa-trash"></i> Cleanup ${result.data.orphanedCount} Records`;
+                }
+            } else {
+                showNotification(`No orphaned records found in ${currentDatabaseTable} table`, 'success');
+            }
+        } else {
+            console.error('Failed to scan orphaned records:', result.error);
+            showNotification('Failed to scan for orphaned records', 'error');
+        }
+        
+    } catch (error) {
+        console.error('Error scanning orphaned records:', error);
+        showNotification('Error occurred while scanning for orphaned records', 'error');
+    } finally {
+        // Reset button state
+        const scanButton = document.getElementById('scan-orphaned-btn');
+        if (scanButton) {
+            scanButton.disabled = false;
+            scanButton.innerHTML = '<i class="fas fa-search"></i> Scan Orphaned';
+        }
+    }
+}
+
+async function cleanupOrphanedRecords() {
+    if (currentDatabaseTable === 'user') {
+        showNotification('User table cleanup is not allowed for safety reasons', 'warning');
+        return;
+    }
+    
+    if (currentOrphanedRecords.length === 0) {
+        showNotification('No orphaned records to cleanup. Please scan first.', 'info');
+        return;
+    }
+    
+    const confirmMessage = `Are you sure you want to delete ${currentOrphanedRecords.length} orphaned records from the ${currentDatabaseTable} table?\n\nThis action cannot be undone.`;
+    
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+    
+    try {
+        console.log('Cleaning up orphaned records in table:', currentDatabaseTable);
+        
+        // Show loading state
+        const cleanupButton = document.getElementById('cleanup-orphaned-btn');
+        if (cleanupButton) {
+            cleanupButton.disabled = true;
+            cleanupButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cleaning...';
+        }
+        
+        const response = await fetch(`/api/admin/database/orphaned/${currentDatabaseTable}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification(`Successfully cleaned up ${result.data.deletedCount} orphaned records from ${currentDatabaseTable} table`, 'success');
+            
+            // Reset state
+            currentOrphanedRecords = [];
+            if (cleanupButton) {
+                cleanupButton.style.display = 'none';
+            }
+            
+            // Reload the table data
+            loadDatabaseTable(currentDatabaseTable);
+            
+            // Reload statistics
+            loadDatabaseStats();
+            
+        } else {
+            console.error('Failed to cleanup orphaned records:', result.error);
+            showNotification('Failed to cleanup orphaned records', 'error');
+        }
+        
+    } catch (error) {
+        console.error('Error cleaning up orphaned records:', error);
+        showNotification('Error occurred during cleanup', 'error');
+    } finally {
+        // Reset button state
+        const cleanupButton = document.getElementById('cleanup-orphaned-btn');
+        if (cleanupButton) {
+            cleanupButton.disabled = false;
+            cleanupButton.innerHTML = '<i class="fas fa-trash"></i> Cleanup Orphaned';
+        }
+    }
+}
+
+function updateTableActionsVisibility() {
+    const scanButton = document.getElementById('scan-orphaned-btn');
+    const cleanupButton = document.getElementById('cleanup-orphaned-btn');
+    
+    if (currentDatabaseTable === 'user') {
+        // Hide cleanup buttons for user table
+        if (scanButton) scanButton.style.display = 'none';
+        if (cleanupButton) cleanupButton.style.display = 'none';
+    } else {
+        // Show scan button for other tables
+        if (scanButton) scanButton.style.display = 'inline-block';
+        // Hide cleanup button until scan is performed
+        if (cleanupButton) cleanupButton.style.display = 'none';
+        // Reset orphaned records
+        currentOrphanedRecords = [];
     }
 }
