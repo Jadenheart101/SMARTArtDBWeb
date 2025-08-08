@@ -2005,16 +2005,16 @@ async function downloadAllMedia() {
             URL.revokeObjectURL(jsonUrl);
             
             // Download each media file
-            for (const media of backupData.media) {
+            for (const media of backupData.mediaFiles) {
                 try {
-                    const mediaResponse = await fetch(media.file_path);
+                    const mediaResponse = await fetch(media.fileUrl || media.filePath);
                     if (mediaResponse.ok) {
                         const blob = await mediaResponse.blob();
                         const url = URL.createObjectURL(blob);
                         
                         const link = document.createElement('a');
                         link.href = url;
-                        link.download = media.file_name;
+                        link.download = media.fileName;
                         document.body.appendChild(link);
                         link.click();
                         document.body.removeChild(link);
@@ -2024,11 +2024,11 @@ async function downloadAllMedia() {
                         await new Promise(resolve => setTimeout(resolve, 100));
                     }
                 } catch (fileError) {
-                    console.error(`Error downloading ${media.file_name}:`, fileError);
+                    console.error(`Error downloading ${media.fileName}:`, fileError);
                 }
             }
             
-            showNotification(`Successfully downloaded ${backupData.media.length} media files and backup JSON`, 'success');
+            showNotification(`Successfully downloaded ${backupData.mediaFiles.length} media files and backup JSON`, 'success');
             
         } else {
             showNotification('Failed to prepare backup data', 'error');

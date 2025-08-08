@@ -831,10 +831,14 @@ app.post('/api/media/upload', upload.single('file'), async (req, res) => {
     const fileUrl = `/uploads/${relativePath.replace(/\\/g, '/')}`;
     
     try {
+      // Get next available media file ID
+      const nextMediaId = await getNextAvailableId('media_files', 'id');
+      
       // Generate a unique file_id for this upload
       const uniqueFileId = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
       console.log('Inserting media record:', {
+        id: nextMediaId,
         user_id: parsedUserId,
         file_name: filename,
         original_name: originalname,
@@ -845,13 +849,13 @@ app.post('/api/media/upload', upload.single('file'), async (req, res) => {
       });
       
       console.log('About to insert into database:', {
-        parsedUserId, filename, originalname, fileUrl, mimetype, size
+        nextMediaId, parsedUserId, filename, originalname, fileUrl, mimetype, size
       });
       
       // Store file info in database (use relative path for file_path)
       const result = await executeQuery(
-        'INSERT INTO media_files (user_id, file_name, original_name, file_path, file_url, mime_type, file_size) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [parsedUserId, filename, originalname, fileUrl, fileUrl, mimetype, size]
+        'INSERT INTO media_files (id, user_id, file_name, original_name, file_path, file_url, mime_type, file_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [nextMediaId, parsedUserId, filename, originalname, fileUrl, fileUrl, mimetype, size]
       );
       
       console.log('Database insert successful, result:', result);
@@ -860,7 +864,7 @@ app.post('/api/media/upload', upload.single('file'), async (req, res) => {
         success: true,
         message: 'File uploaded successfully',
         file: {
-          id: result.insertId,
+          id: nextMediaId,
           name: filename,
           originalName: originalname,
           url: fileUrl,
@@ -2073,7 +2077,7 @@ app.get('/api/admin/media/backup-data', async (req, res) => {
         p.ProjectName as linked_project_name
       FROM media_files mf
       LEFT JOIN user u ON mf.user_id = u.UserID
-      LEFT JOIN project p ON p.ImageURL LIKE CONCAT('%', mf.file_name, '%')
+      LEFT JOIN project p ON p.image_id = mf.id
       ORDER BY mf.created_at DESC
     `);
     
