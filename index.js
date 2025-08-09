@@ -44,7 +44,32 @@ async function getNextAvailableId(tableName, idColumn) {
 }
 
 // Helper function for automatic storage cleanup
-const ENABLE_AUTO_CLEANUP = false; // Temporarily disabled for debugging
+const ENABLE_AUTO_CLEANUP = true; // Enabled for testing editing session protection
+
+// Track active editing sessions to prevent cleanup during editing
+const activeEditingSessions = new Map(); // projectId -> { userId, timestamp, lastActivity }
+
+// Helper function to check if any projects are currently being edited
+function hasActiveEditingSessions() {
+  const now = Date.now();
+  const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes timeout
+  
+  // Clean up expired sessions
+  for (const [projectId, session] of activeEditingSessions.entries()) {
+    if (now - session.lastActivity > SESSION_TIMEOUT) {
+      console.log('🧹 CLEANUP: Removing expired editing session for project', projectId);
+      activeEditingSessions.delete(projectId);
+    }
+  }
+  
+  const activeSessions = activeEditingSessions.size;
+  if (activeSessions > 0) {
+    console.log('🧹 CLEANUP: Found', activeSessions, 'active editing session(s)');
+    console.log('🧹 CLEANUP: Active projects:', Array.from(activeEditingSessions.keys()));
+  }
+  
+  return activeSessions > 0;
+}
 
 async function performAutomaticStorageCleanup() {
   if (!ENABLE_AUTO_CLEANUP) {
@@ -52,21 +77,73 @@ async function performAutomaticStorageCleanup() {
     return { deletedCount: 0, totalOrphaned: 0 };
   }
   
+  // Check if any users are currently editing projects
+  if (hasActiveEditingSessions()) {
+    console.log('🧹 CLEANUP: Skipping auto-cleanup - users are actively editing projects');
+    return { deletedCount: 0, totalOrphaned: 0, skipped: true, reason: 'active_editing' };
+  }
+  
   try {
     console.log('🧹 CLEANUP: Starting automatic storage cleanup...');
     
-    // Get all files referenced in the database
-    const dbFiles = await executeQuery('SELECT id, file_path, file_name FROM media_files WHERE file_path IS NOT NULL');
-    console.log('🧹 CLEANUP: Found', dbFiles.length, 'files in database');
+    // Get all files referenced in the database from multiple sources
     
-    const dbFilePaths = new Set(dbFiles.map(row => {
+    // 1. Files in media_files table
+    const dbFiles = await executeQuery('SELECT id, file_path, file_name FROM media_files WHERE file_path IS NOT NULL');
+    console.log('🧹 CLEANUP: Found', dbFiles.length, 'files in media_files table');
+    
+    // 2. Files referenced in art table (media_id field with proper foreign key)
+    const artFiles = await executeQuery(`
+      SELECT mf.id, mf.file_path, mf.file_name, a.ArtId, a.ArtName 
+      FROM art a 
+      JOIN media_files mf ON a.media_id = mf.id 
+      WHERE a.media_id IS NOT NULL
+    `);
+    console.log('🧹 CLEANUP: Found', artFiles.length, 'files referenced by art info records');
+    
+    // 3. Files referenced in projects (image_id field)
+    const projectFiles = await executeQuery(`
+      SELECT mf.id, mf.file_path, mf.file_name, p.ProjectID, p.ProjectName 
+      FROM project p 
+      JOIN media_files mf ON p.image_id = mf.id 
+      WHERE p.image_id IS NOT NULL
+    `);
+    console.log('🧹 CLEANUP: Found', projectFiles.length, 'files referenced by projects');
+    
+    // 4. Files referenced in card_media table
+    const cardFiles = await executeQuery(`
+      SELECT mf.id, mf.file_path, mf.file_name, cm.card_type 
+      FROM card_media cm 
+      JOIN media_files mf ON cm.media_id = mf.id
+    `);
+    console.log('🧹 CLEANUP: Found', cardFiles.length, 'files referenced by cards');
+    
+    // Combine all referenced files
+    const allReferencedFiles = [
+      ...dbFiles,
+      ...artFiles,
+      ...projectFiles,
+      ...cardFiles
+    ];
+    
+    const dbFilePaths = new Set(allReferencedFiles.map(row => {
       // Normalize path - remove leading slash and convert to forward slashes
       let path = row.file_path;
       if (path.startsWith('/')) path = path.substring(1);
       return path.replace(/\\/g, '/');
     }));
     
-    console.log('🧹 CLEANUP: Database file paths:', Array.from(dbFilePaths).slice(0, 5), '...');
+    // Also create a set of media file IDs for additional safety
+    const referencedMediaIds = new Set([
+      ...dbFiles.map(f => f.id.toString()),
+      ...artFiles.map(f => f.id.toString()),
+      ...projectFiles.map(f => f.id.toString()),
+      ...cardFiles.map(f => f.id.toString())
+    ]);
+    
+    console.log('🧹 CLEANUP: Total unique referenced files:', dbFilePaths.size);
+    console.log('🧹 CLEANUP: Referenced media IDs:', referencedMediaIds.size);
+    console.log('🧹 CLEANUP: Sample referenced paths:', Array.from(dbFilePaths).slice(0, 3), '...');
     
     // Recursively scan uploads directory
     const orphanedFiles = [];
@@ -87,16 +164,29 @@ async function performAutomaticStorageCleanup() {
               ? relativeFilePath 
               : `uploads/${relativeFilePath}`;
               
-            if (!dbFilePaths.has(uploadRelativePath) && !dbFilePaths.has(relativeFilePath)) {
+            // Check multiple ways the file might be referenced
+            const isReferencedByPath = dbFilePaths.has(uploadRelativePath) || dbFilePaths.has(relativeFilePath);
+            
+            // Also check by extracting media ID from filename (for additional safety)
+            const fileNameMatch = entry.name.match(/^(\d+)_/);
+            const mediaIdFromName = fileNameMatch ? fileNameMatch[1] : null;
+            const isReferencedById = mediaIdFromName && referencedMediaIds.has(mediaIdFromName);
+            
+            if (!isReferencedByPath && !isReferencedById) {
               console.log('🧹 CLEANUP: ❌ Found orphaned file:', {
                 fullPath,
                 relativeFilePath,
                 uploadRelativePath,
-                inDatabase: dbFilePaths.has(uploadRelativePath) || dbFilePaths.has(relativeFilePath)
+                mediaIdFromName,
+                checkedPaths: [uploadRelativePath, relativeFilePath],
+                isReferencedByPath,
+                isReferencedById
               });
               orphanedFiles.push(fullPath);
             } else {
-              console.log('🧹 CLEANUP: ✅ File is referenced in database:', relativeFilePath);
+              const referenceType = isReferencedByPath ? 'file path' : 'media ID';
+              const referenceDetail = isReferencedByPath ? relativeFilePath : `ID ${mediaIdFromName}`;
+              console.log(`🧹 CLEANUP: ✅ File is referenced in database by ${referenceType}: ${referenceDetail}`);
             }
           }
         }
@@ -109,6 +199,13 @@ async function performAutomaticStorageCleanup() {
     await scanDirectory(uploadsDir, 'uploads');
     
     console.log('🧹 CLEANUP: Scan complete. Found', orphanedFiles.length, 'orphaned files');
+    console.log('🧹 CLEANUP: Reference summary:');
+    console.log(`  📁 ${dbFiles.length} files in media_files table`);
+    console.log(`  🎨 ${artFiles.length} files linked to art info records`);
+    console.log(`  📋 ${projectFiles.length} files linked to projects`);
+    console.log(`  🃏 ${cardFiles.length} files linked to cards`);
+    console.log(`  🔗 ${allReferencedFiles.length} total file references found`);
+    console.log(`  🗂️ ${dbFilePaths.size} unique files protected from deletion`);
     
     // Delete orphaned files
     let deletedCount = 0;
@@ -496,16 +593,36 @@ app.get('/api/art/media/:mediaId', async (req, res) => {
     const mediaId = req.params.mediaId;
     console.log('🎨 GET /api/art/media/:mediaId called with mediaId:', mediaId);
     
-    // First, try to find the media file to get its ID
-    const mediaFiles = await executeQuery('SELECT id FROM media_files WHERE file_name = ?', [mediaId]);
+    let mediaFileId;
     
-    if (mediaFiles.length === 0) {
-      console.log('🎨 No media file found with filename:', mediaId);
-      return res.status(404).json({ success: false, message: 'Media file not found' });
+    // Check if mediaId is numeric (direct media file ID) or filename
+    console.log('🎨 Debug: mediaId type:', typeof mediaId, 'value:', mediaId);
+    console.log('🎨 Debug: regex test result:', /^\d+$/.test(mediaId));
+    
+    if (/^\d+$/.test(mediaId)) {
+      // It's a numeric ID - use it directly
+      mediaFileId = parseInt(mediaId);
+      console.log('🎨 Using numeric media file ID:', mediaFileId);
+      
+      // Verify the media file exists
+      const mediaFiles = await executeQuery('SELECT id FROM media_files WHERE id = ?', [mediaFileId]);
+      if (mediaFiles.length === 0) {
+        console.log('🎨 No media file found with ID:', mediaFileId);
+        return res.status(404).json({ success: false, message: 'Media file not found' });
+      }
+    } else {
+      // It's a filename - look up the media file ID
+      console.log('🎨 Treating as filename, looking up by file_name');
+      const mediaFiles = await executeQuery('SELECT id FROM media_files WHERE file_name = ?', [mediaId]);
+      
+      if (mediaFiles.length === 0) {
+        console.log('🎨 No media file found with filename:', mediaId);
+        return res.status(404).json({ success: false, message: 'Media file not found' });
+      }
+      
+      mediaFileId = mediaFiles[0].id;
+      console.log('🎨 Found media file ID by filename:', mediaFileId);
     }
-    
-    const mediaFileId = mediaFiles[0].id;
-    console.log('🎨 Found media file ID:', mediaFileId);
     
     // Now look for art records linked to this media file ID
     const artwork = await executeQuery('SELECT * FROM art WHERE artcol = ?', [mediaFileId.toString()]);
@@ -556,14 +673,28 @@ app.post('/api/art', async (req, res) => {
   
   try {
     console.log('🎨 ART INFO: Getting next available ArtId');
+    
+    // Validate that the media file exists if artcol is provided
+    if (artcol) {
+      const mediaExists = await executeQuery('SELECT id FROM media_files WHERE id = ?', [artcol]);
+      if (mediaExists.length === 0) {
+        console.log('🎨 ART INFO: ❌ Media file not found for ID:', artcol);
+        return res.status(400).json({ 
+          success: false, 
+          message: `Media file with ID ${artcol} not found. Art info must be linked to an existing media file.` 
+        });
+      }
+      console.log('🎨 ART INFO: ✅ Media file validated for ID:', artcol);
+    }
+    
     // Get next available ArtId
     const nextArtId = await getNextAvailableId('art', 'ArtId');
     
     console.log('🎨 ART INFO: 📤 Inserting art record with ID:', nextArtId);
     
     const result = await executeQuery(
-      'INSERT INTO art (ArtId, ArtistName, Submitor, Date, ArtMedia, ArtName, artcol) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [nextArtId, ArtistName, Submitor || null, artDate || new Date().toISOString().split('T')[0], ArtMedia || null, ArtName, artcol || null]
+      'INSERT INTO art (ArtId, ArtistName, Submitor, Date, ArtMedia, ArtName, artcol, media_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [nextArtId, ArtistName, Submitor || null, artDate || new Date().toISOString().split('T')[0], ArtMedia || null, ArtName, artcol || null, artcol ? parseInt(artcol) : null]
     );
     
     console.log('🎨 ART INFO: Insert result:', { insertId: result.insertId, affectedRows: result.affectedRows });
@@ -582,9 +713,22 @@ app.put('/api/art/:id', async (req, res) => {
   const { ArtistName, Submitor, Date: artDate, ArtMedia, ArtName, artcol, user_id } = req.body;
   
   try {
+    // Validate that the media file exists if artcol is provided
+    if (artcol) {
+      const mediaExists = await executeQuery('SELECT id FROM media_files WHERE id = ?', [artcol]);
+      if (mediaExists.length === 0) {
+        console.log('🎨 ART INFO UPDATE: ❌ Media file not found for ID:', artcol);
+        return res.status(400).json({ 
+          success: false, 
+          message: `Media file with ID ${artcol} not found. Art info must be linked to an existing media file.` 
+        });
+      }
+      console.log('🎨 ART INFO UPDATE: ✅ Media file validated for ID:', artcol);
+    }
+    
     const result = await executeQuery(
-      'UPDATE art SET ArtistName = ?, Submitor = ?, Date = ?, ArtMedia = ?, ArtName = ?, artcol = ? WHERE ArtId = ?',
-      [ArtistName, Submitor, artDate, ArtMedia, ArtName, artcol, req.params.id]
+      'UPDATE art SET ArtistName = ?, Submitor = ?, Date = ?, ArtMedia = ?, ArtName = ?, artcol = ?, media_id = ? WHERE ArtId = ?',
+      [ArtistName, Submitor, artDate, ArtMedia, ArtName, artcol, artcol ? parseInt(artcol) : null, req.params.id]
     );
     
     if (result.affectedRows === 0) {
@@ -962,7 +1106,9 @@ app.delete('/api/projects/:id', async (req, res) => {
     // Perform automatic storage cleanup after project deletion
     const cleanupResult = await performAutomaticStorageCleanup();
     let cleanupMessage = '';
-    if (cleanupResult.deletedCount > 0) {
+    if (cleanupResult.skipped && cleanupResult.reason === 'active_editing') {
+      cleanupMessage = ' (cleanup skipped - users are editing)';
+    } else if (cleanupResult.deletedCount > 0) {
       cleanupMessage = ` and cleaned up ${cleanupResult.deletedCount} orphaned file(s)`;
     }
     
@@ -1033,6 +1179,109 @@ app.put('/api/admin/projects/:id/approve', async (req, res) => {
   } catch (error) {
     console.error('Error updating project approval:', error);
     res.status(500).json({ success: false, message: 'Error updating project approval', error: error.message });
+  }
+});
+
+// Editing Session Management API Routes
+app.post('/api/projects/:id/editing/start', async (req, res) => {
+  try {
+    const projectId = req.params.id;
+    const { user_id } = req.body;
+    
+    if (!user_id) {
+      return res.status(400).json({ success: false, message: 'User ID is required' });
+    }
+    
+    // Check if project exists
+    const projectResult = await executeQuery('SELECT ProjectID FROM project WHERE ProjectID = ?', [projectId]);
+    if (projectResult.length === 0) {
+      return res.status(404).json({ success: false, message: 'Project not found' });
+    }
+    
+    // Start editing session
+    activeEditingSessions.set(projectId, {
+      userId: user_id,
+      timestamp: Date.now(),
+      lastActivity: Date.now()
+    });
+    
+    console.log(`📝 EDITING: User ${user_id} started editing project ${projectId}`);
+    res.json({ success: true, message: 'Editing session started' });
+  } catch (error) {
+    console.error('Error starting editing session:', error);
+    res.status(500).json({ success: false, message: 'Error starting editing session', error: error.message });
+  }
+});
+
+app.post('/api/projects/:id/editing/heartbeat', async (req, res) => {
+  try {
+    const projectId = req.params.id;
+    const { user_id } = req.body;
+    
+    if (!user_id) {
+      return res.status(400).json({ success: false, message: 'User ID is required' });
+    }
+    
+    const session = activeEditingSessions.get(projectId);
+    if (session && session.userId === user_id) {
+      session.lastActivity = Date.now();
+      console.log(`💓 EDITING: Heartbeat for user ${user_id} editing project ${projectId}`);
+    }
+    
+    res.json({ success: true, message: 'Heartbeat received' });
+  } catch (error) {
+    console.error('Error updating editing heartbeat:', error);
+    res.status(500).json({ success: false, message: 'Error updating editing heartbeat', error: error.message });
+  }
+});
+
+app.post('/api/projects/:id/editing/end', async (req, res) => {
+  try {
+    const projectId = req.params.id;
+    const { user_id } = req.body || {};
+    
+    console.log('📝 EDITING: Ending session for project:', projectId, 'user_id:', user_id);
+    
+    if (!user_id) {
+      console.log('📝 EDITING: No user_id provided, removing session anyway');
+      // Remove the session even if no user_id provided (for cleanup)
+      activeEditingSessions.delete(projectId);
+      return res.json({ success: true, message: 'Session ended (no user validation)' });
+    }
+    
+    const session = activeEditingSessions.get(projectId);
+    if (session && session.userId === user_id) {
+      activeEditingSessions.delete(projectId);
+      console.log(`✅ EDITING: User ${user_id} finished editing project ${projectId}`);
+    }
+    
+    res.json({ success: true, message: 'Editing session ended' });
+  } catch (error) {
+    console.error('Error ending editing session:', error);
+    res.status(500).json({ success: false, message: 'Error ending editing session', error: error.message });
+  }
+});
+
+app.get('/api/editing/status', async (req, res) => {
+  try {
+    // Clean up expired sessions first
+    hasActiveEditingSessions();
+    
+    const sessions = Array.from(activeEditingSessions.entries()).map(([projectId, session]) => ({
+      projectId,
+      userId: session.userId,
+      timestamp: session.timestamp,
+      lastActivity: session.lastActivity
+    }));
+    
+    res.json({ 
+      success: true, 
+      activeSessions: sessions.length,
+      sessions: sessions 
+    });
+  } catch (error) {
+    console.error('Error getting editing status:', error);
+    res.status(500).json({ success: false, message: 'Error getting editing status', error: error.message });
   }
 });
 
@@ -1234,23 +1483,34 @@ app.get('/api/media/files', async (req, res) => {
 app.get('/api/media/file/:fileId', async (req, res) => {
   try {
     const { fileId } = req.params;
+    console.log('🗂️ GET /api/media/file/:fileId called with fileId:', fileId);
     
     const files = await executeQuery('SELECT * FROM media_files WHERE id = ?', [fileId]);
     
     if (files.length === 0) {
+      console.log('🗂️ No file found in database with ID:', fileId);
       return res.status(404).json({ success: false, message: 'File not found' });
     }
     
     const file = files[0];
+    console.log('🗂️ Found file in database:', { id: file.id, file_name: file.file_name, file_path: file.file_path });
     
-    // Check if file exists on disk
-    if (!fs.existsSync(file.file_path)) {
-      // Remove from database if file doesn't exist
-      await executeQuery('DELETE FROM media_files WHERE id = ?', [fileId]);
-      return res.status(404).json({ success: false, message: 'File not found on disk' });
+    // Check if file exists on disk (only check if file_path is provided)
+    if (file.file_path) {
+      // Convert relative path to absolute path for file existence check
+      const absolutePath = path.join(__dirname, file.file_path);
+      console.log('🗂️ Checking file existence at:', absolutePath);
+      
+      if (!fs.existsSync(absolutePath)) {
+        console.log('🗂️ ❌ File not found on disk, removing from database');
+        // Remove from database if file doesn't exist
+        await executeQuery('DELETE FROM media_files WHERE id = ?', [fileId]);
+        return res.status(404).json({ success: false, message: 'File not found on disk' });
+      }
+      console.log('🗂️ ✅ File exists on disk');
     }
     
-    res.json({
+    const responseData = {
       success: true,
       file: {
         id: file.id,
@@ -1261,7 +1521,10 @@ app.get('/api/media/file/:fileId', async (req, res) => {
         mimeType: file.mime_type,
         createdAt: file.created_at
       }
-    });
+    };
+    
+    console.log('🗂️ Sending response:', responseData);
+    res.json(responseData);
   } catch (error) {
     console.error('Error getting file info:', error);
     res.status(500).json({ success: false, message: 'Error getting file info', error: error.message });
@@ -1415,7 +1678,9 @@ app.delete('/api/media/file/:fileId', async (req, res) => {
       // Perform automatic storage cleanup after file deletion
       const cleanupResult = await performAutomaticStorageCleanup();
       let cleanupMessage = '';
-      if (cleanupResult.deletedCount > 0) {
+      if (cleanupResult.skipped && cleanupResult.reason === 'active_editing') {
+        cleanupMessage = ' (cleanup skipped - users are editing)';
+      } else if (cleanupResult.deletedCount > 0) {
         cleanupMessage = ` and cleaned up ${cleanupResult.deletedCount} orphaned file(s)`;
       }
       
@@ -2285,12 +2550,17 @@ app.get('/api/admin/database/orphaned/:tableName', async (req, res) => {
                 break;
                 
             case 'art':
-                // Art records with invalid ArtMedia references
+                // Art records with invalid media_id or project_id references
                 orphanedRecords = await executeQuery(`
-                    SELECT a.*, 'Invalid ArtMedia reference' as reason
+                    SELECT a.*, 'Invalid media_id reference' as reason
                     FROM art a 
-                    LEFT JOIN media_files m ON a.ArtMedia = m.filename 
-                    WHERE m.filename IS NULL AND a.ArtMedia IS NOT NULL AND a.ArtMedia != ''
+                    LEFT JOIN media_files m ON a.media_id = m.id 
+                    WHERE a.media_id IS NOT NULL AND m.id IS NULL
+                    UNION ALL
+                    SELECT a.*, 'Invalid project_id reference' as reason
+                    FROM art a 
+                    LEFT JOIN project p ON a.project_id = p.ProjectID 
+                    WHERE a.project_id IS NOT NULL AND p.ProjectID IS NULL
                 `);
                 break;
                 
@@ -2389,13 +2659,18 @@ app.delete('/api/admin/database/orphaned/:tableName', async (req, res) => {
                 break;
                 
             case 'art':
-                // Delete art records with invalid ArtMedia references
+                // Delete art records with invalid media_id or project_id references
                 const artResult = await executeQuery(`
                     DELETE a FROM art a 
-                    LEFT JOIN media_files m ON a.ArtMedia = m.filename 
-                    WHERE m.filename IS NULL AND a.ArtMedia IS NOT NULL AND a.ArtMedia != ''
+                    LEFT JOIN media_files m ON a.media_id = m.id 
+                    WHERE a.media_id IS NOT NULL AND m.id IS NULL
                 `);
-                deletedCount = artResult.affectedRows;
+                const artResult2 = await executeQuery(`
+                    DELETE a FROM art a 
+                    LEFT JOIN project p ON a.project_id = p.ProjectID 
+                    WHERE a.project_id IS NOT NULL AND p.ProjectID IS NULL
+                `);
+                deletedCount = artResult.affectedRows + artResult2.affectedRows;
                 break;
                 
             case 'project_topics':
@@ -2736,7 +3011,9 @@ app.delete('/api/admin/media/:mediaId', async (req, res) => {
         // Perform automatic storage cleanup after media deletion
         const cleanupResult = await performAutomaticStorageCleanup();
         let cleanupMessage = '';
-        if (cleanupResult.deletedCount > 0) {
+        if (cleanupResult.skipped && cleanupResult.reason === 'active_editing') {
+            cleanupMessage = ' (cleanup skipped - users are editing)';
+        } else if (cleanupResult.deletedCount > 0) {
             cleanupMessage = ` and cleaned up ${cleanupResult.deletedCount} orphaned file(s)`;
         }
 
@@ -3016,7 +3293,9 @@ app.delete('/api/admin/users/:userId', async (req, res) => {
         // Perform automatic storage cleanup after user deletion
         const cleanupResult = await performAutomaticStorageCleanup();
         let cleanupMessage = '';
-        if (cleanupResult.deletedCount > 0) {
+        if (cleanupResult.skipped && cleanupResult.reason === 'active_editing') {
+            cleanupMessage = ' (cleanup skipped - users are editing)';
+        } else if (cleanupResult.deletedCount > 0) {
             cleanupMessage = ` and cleaned up ${cleanupResult.deletedCount} orphaned file(s)`;
         }
         

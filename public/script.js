@@ -7,6 +7,71 @@ function getCurrentUserId() {
     return currentUser ? currentUser.id : null;
 }
 
+// Editing session management
+let editingHeartbeatInterval = null;
+
+async function startEditingSession(projectId) {
+    const userId = getCurrentUserId();
+    if (!userId) return;
+
+    try {
+        await fetch(`${API_BASE_URL}/projects/${projectId}/editing/start`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ user_id: userId })
+        });
+        
+        // Start heartbeat to keep session alive
+        if (editingHeartbeatInterval) {
+            clearInterval(editingHeartbeatInterval);
+        }
+        editingHeartbeatInterval = setInterval(async () => {
+            try {
+                await fetch(`${API_BASE_URL}/projects/${projectId}/editing/heartbeat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ user_id: userId })
+                });
+            } catch (error) {
+                console.error('Error sending editing heartbeat:', error);
+            }
+        }, 60000); // Send heartbeat every minute
+        
+        console.log('📝 Started editing session for project', projectId);
+    } catch (error) {
+        console.error('Error starting editing session:', error);
+    }
+}
+
+async function endEditingSession(projectId) {
+    const userId = getCurrentUserId();
+    if (!userId) return;
+
+    try {
+        // Clear heartbeat
+        if (editingHeartbeatInterval) {
+            clearInterval(editingHeartbeatInterval);
+            editingHeartbeatInterval = null;
+        }
+        
+        await fetch(`${API_BASE_URL}/projects/${projectId}/editing/end`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ user_id: userId })
+        });
+        
+        console.log('✅ Ended editing session for project', projectId);
+    } catch (error) {
+        console.error('Error ending editing session:', error);
+    }
+}
+
 // Global DOM elements (will be populated after components load)
 let galleryGrid, galleryLoading;
 
@@ -1285,6 +1350,9 @@ async function editProject(projectID) {
             // Store project ID for editing
             window.currentEditingProjectId = projectID;
             
+            // Start editing session tracking
+            await startEditingSession(projectID);
+            
             // Show modal
             const modal = document.getElementById('editProjectModal');
             if (modal) modal.style.display = 'block';
@@ -1313,19 +1381,45 @@ async function editProject(projectID) {
             // Show/hide image selection based on whether project has an image
             const thumbnail = document.getElementById('editProjectImageThumbnail');
             const addBtn = document.getElementById('editAddImageBtn');
+            const imageButtonText = document.getElementById('editImageButtonText');
+            
+            console.log('🖼️ Image display logic:', {
+                hasImageID: !!project.ImageID,
+                hasImageURL: !!project.ImageURL,
+                ImageID: project.ImageID,
+                ImageURL: project.ImageURL
+            });
             
             if (project.ImageID && project.ImageURL) {
-                // Project has an image - show thumbnail
+                // Project has an image - show thumbnail and update button text
                 const thumbnailImg = document.getElementById('editProjectThumbnailImg');
                 if (thumbnailImg && thumbnail) {
                     thumbnailImg.src = project.ImageURL;
                     thumbnail.style.display = 'block';
+                    console.log('✅ Showing thumbnail with image:', project.ImageURL);
                 }
-                if (addBtn) addBtn.style.display = 'none';
+                if (addBtn) {
+                    addBtn.style.display = 'none';
+                    console.log('🔒 Hiding add image button');
+                }
+                if (imageButtonText) {
+                    imageButtonText.textContent = 'Change Image';
+                    console.log('🔄 Updated button text to "Change Image"');
+                }
             } else {
-                // No image - show add button
-                if (thumbnail) thumbnail.style.display = 'none';
-                if (addBtn) addBtn.style.display = 'block';
+                // No image - hide thumbnail and update button text
+                if (thumbnail) {
+                    thumbnail.style.display = 'none';
+                    console.log('🔒 Hiding thumbnail (no image)');
+                }
+                if (addBtn) {
+                    addBtn.style.display = 'block';
+                    console.log('✅ Showing add image button');
+                }
+                if (imageButtonText) {
+                    imageButtonText.textContent = 'Add Image';
+                    console.log('➕ Updated button text to "Add Image"');
+                }
             }
             
             // Load project topics for editing
@@ -1492,6 +1586,12 @@ function editArtInfoFromProject() {
 
 // Close Edit Project Modal
 function closeEditProjectModal() {
+    // End editing session if there's an active project being edited
+    if (window.currentEditingProjectId) {
+        endEditingSession(window.currentEditingProjectId);
+        window.currentEditingProjectId = null;
+    }
+    
     const modal = document.getElementById('editProjectModal');
     if (modal) {
         modal.style.display = 'none';
@@ -1510,16 +1610,35 @@ function closeEditProjectModal() {
 
 // Show edit image gallery
 function showEditImageGallery() {
+    console.log('🖼️ showEditImageGallery called');
+    
     const gallery = document.getElementById('editImageGallery');
     const addBtn = document.getElementById('editAddImageBtn');
     
-    if (gallery && addBtn) {
-        gallery.style.display = 'block';
-        addBtn.style.display = 'none';
-        
-        // Load user's images
-        loadEditImageGallery();
+    console.log('📋 Gallery elements check:', {
+        gallery: !!gallery,
+        addBtn: !!addBtn
+    });
+    
+    if (!gallery) {
+        console.error('❌ editImageGallery element not found in showEditImageGallery');
+        showNotification('Image gallery element not found. Please refresh the page.', 'error');
+        return;
     }
+    
+    if (!addBtn) {
+        console.error('❌ editAddImageBtn element not found in showEditImageGallery');
+        showNotification('Add image button element not found. Please refresh the page.', 'error');
+        return;
+    }
+    
+    console.log('✅ Both elements found, showing gallery');
+    gallery.style.display = 'block';
+    addBtn.style.display = 'none';
+    
+    // Load user's images
+    console.log('📤 Loading edit image gallery');
+    loadEditImageGallery();
 }
 
 // Hide edit image gallery
@@ -1535,38 +1654,72 @@ function hideEditImageGallery() {
 
 // Load images for edit gallery
 async function loadEditImageGallery() {
+    console.log('📂 loadEditImageGallery started');
+    
     const galleryGrid = document.getElementById('editImageGalleryGrid');
     const currentUser = JSON.parse(localStorage.getItem('currentUser'));
     
-    if (!galleryGrid || !currentUser) return;
+    console.log('📋 Gallery load elements check:', {
+        galleryGrid: !!galleryGrid,
+        currentUser: !!currentUser,
+        userId: currentUser?.id
+    });
     
+    if (!galleryGrid) {
+        console.error('❌ editImageGalleryGrid element not found');
+        return;
+    }
+    
+    if (!currentUser) {
+        console.error('❌ No current user found in localStorage');
+        galleryGrid.innerHTML = '<div class="gallery-empty">Please log in to view images</div>';
+        return;
+    }
+
     try {
+        console.log('📤 Loading images for user:', currentUser.id);
         galleryGrid.innerHTML = '<div class="gallery-loading"><i class="fas fa-spinner fa-spin"></i> Loading images...</div>';
         
-        const response = await fetch(`${API_BASE_URL}/media/files?userId=${currentUser.id}`);
+        const apiUrl = `${API_BASE_URL}/media/files?userId=${currentUser.id}`;
+        console.log('🌐 Making request to:', apiUrl);
+        
+        const response = await fetch(apiUrl);
+        console.log('📨 Response status:', response.status, response.statusText);
+        
         const result = await response.json();
+        console.log('📊 API Response:', {
+            success: result.success,
+            filesCount: result.files?.length,
+            message: result.message
+        });
         
         if (result.success && result.files) {
             const imageFiles = result.files.filter(file => 
                 file.mimeType && file.mimeType.startsWith('image/')
             );
             
+            console.log('🖼️ Image files found:', imageFiles.length);
+            
             if (imageFiles.length === 0) {
                 galleryGrid.innerHTML = '<div class="gallery-empty">No images found. Upload some images first!</div>';
                 return;
             }
             
+            console.log('🎨 Rendering gallery with', imageFiles.length, 'images');
             galleryGrid.innerHTML = imageFiles.map(file => `
                 <div class="gallery-image-item" onclick="selectEditImage('${file.id}', '${file.url}', '${file.customName || file.originalName || file.name}')">
                     <img src="${file.url}" alt="${file.customName || file.originalName || file.name}" loading="lazy">
                     <div class="gallery-image-name">${file.customName || file.originalName || file.name}</div>
                 </div>
             `).join('');
+            
+            console.log('✅ Gallery rendered successfully');
         } else {
+            console.error('❌ API request failed:', result.message);
             galleryGrid.innerHTML = '<div class="gallery-empty">Failed to load images</div>';
         }
     } catch (error) {
-        console.error('Error loading edit images:', error);
+        console.error('❌ Error loading edit images:', error);
         galleryGrid.innerHTML = '<div class="gallery-empty">Error loading images</div>';
     }
 }
@@ -1590,6 +1743,14 @@ function selectEditImage(imageId, imageUrl, imageName) {
         thumbnailImg.src = imageUrl;
         thumbnailImg.alt = imageName;
         thumbnail.style.display = 'block';
+        console.log('✅ Showing thumbnail for selected image');
+    }
+    
+    // Update the image management button text
+    const imageButtonText = document.getElementById('editImageButtonText');
+    if (imageButtonText) {
+        imageButtonText.textContent = 'Change Image';
+        console.log('🔄 Updated button text to "Change Image"');
     }
     
     // Hide gallery and show add button
@@ -1684,6 +1845,31 @@ function updateArtInfoModal() {
 
 // Change edit project image
 function changeEditProjectImage() {
+    console.log('🔄 changeEditProjectImage called');
+    
+    // Check if elements exist before proceeding
+    const gallery = document.getElementById('editImageGallery');
+    const addBtn = document.getElementById('editAddImageBtn');
+    
+    console.log('📋 Elements check:', {
+        gallery: !!gallery,
+        addBtn: !!addBtn,
+        galleryDisplay: gallery ? gallery.style.display : 'N/A',
+        addBtnDisplay: addBtn ? addBtn.style.display : 'N/A'
+    });
+    
+    if (!gallery) {
+        console.error('❌ editImageGallery element not found');
+        showNotification('Image gallery not found. Please refresh the page.', 'error');
+        return;
+    }
+    
+    if (!addBtn) {
+        console.error('❌ editAddImageBtn element not found');
+        showNotification('Add image button not found. Please refresh the page.', 'error');
+        return;
+    }
+    
     showEditImageGallery();
 }
 
@@ -4039,7 +4225,7 @@ window.testArtInfoSaving = function() {
 };
 
 // Show Add Art Info Modal
-function showAddArtInfoModal(mediaFilename = null) {
+async function showAddArtInfoModal(mediaFilename = null) {
     console.log('🎨 Opening Add Art Info Modal...');
     console.log('Media filename parameter:', mediaFilename);
     
@@ -4055,26 +4241,49 @@ function showAddArtInfoModal(mediaFilename = null) {
     let imageInfo = null;
     
     if (mediaFilename) {
-        // Called from project view - get the correct image URL from thumbnail if available
+        // Called from project view - need to find the actual media file ID
         console.log('Using media filename from project view:', mediaFilename);
         
-        // Try to get the correct image URL from the project thumbnail
-        const thumbnailImg = document.getElementById('editProjectThumbnailImg');
-        let imageUrl = `/media/user_${currentUser.username}/images/${mediaFilename}`;
-        
-        if (thumbnailImg && thumbnailImg.src) {
-            // Use the actual image URL from the thumbnail (which should be correct)
-            imageUrl = thumbnailImg.src;
-            console.log('Using thumbnail image URL:', imageUrl);
-        } else {
-            console.log('Thumbnail not found, using constructed URL:', imageUrl);
+        try {
+            // First, try to get the media file ID by filename
+            const response = await fetch(`${API_BASE_URL}/media/files?userId=${currentUser.id}`);
+            const result = await response.json();
+            
+            if (result.success && result.files) {
+                // Find the media file that matches this filename
+                console.log('🔍 Available media files:', result.files.map(f => ({ id: f.id, name: f.name, originalName: f.originalName, url: f.url })));
+                
+                const mediaFile = result.files.find(file => 
+                    file.name === mediaFilename || 
+                    file.originalName === mediaFilename ||
+                    (file.url && file.url.includes(mediaFilename))
+                );
+                
+                if (mediaFile) {
+                    console.log('✅ Found media file:', mediaFile);
+                    imageInfo = {
+                        id: mediaFile.id, // Use the numeric ID
+                        src: mediaFile.url,
+                        name: mediaFile.displayName || mediaFile.originalName || mediaFile.name,
+                        file_name: mediaFile.name
+                    };
+                } else {
+                    console.error('❌ Media file not found for filename:', mediaFilename);
+                    console.error('❌ Looking for:', mediaFilename);
+                    console.error('❌ Available files:', result.files);
+                    showNotification('Media file not found. Please refresh and try again.', 'error');
+                    return;
+                }
+            } else {
+                console.error('❌ Failed to load media files:', result.message);
+                showNotification('Failed to load media files', 'error');
+                return;
+            }
+        } catch (error) {
+            console.error('❌ Error finding media file:', error);
+            showNotification('Error finding media file', 'error');
+            return;
         }
-        
-        imageInfo = {
-            id: mediaFilename,
-            src: imageUrl,
-            name: mediaFilename
-        };
     } else {
         // Called from edit project - get the current selected image
         const selectedImageId = document.getElementById('editSelectedImageId').value;
@@ -6307,6 +6516,8 @@ function showAdminStorageSection() {
     const adminStorageSection = document.getElementById('admin-storage-section');
     if (adminStorageSection) {
         adminStorageSection.style.display = 'block';
+        // Update editing session status when showing the storage section
+        updateEditingSessionStatus();
     }
 }
 
@@ -6317,6 +6528,38 @@ function showAdminDatabaseSection() {
     const adminDatabaseSection = document.getElementById('admin-database-section');
     if (adminDatabaseSection) {
         adminDatabaseSection.style.display = 'block';
+    }
+}
+
+async function updateEditingSessionStatus() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/editing/status`);
+        const result = await response.json();
+        
+        if (result.success) {
+            const statusElement = document.getElementById('editing-sessions-status');
+            if (statusElement) {
+                if (result.activeSessions > 0) {
+                    statusElement.innerHTML = `
+                        <div class="alert alert-warning">
+                            <i class="fas fa-edit"></i> 
+                            <strong>${result.activeSessions}</strong> active editing session(s)
+                            <br><small>Auto-cleanup disabled while users are editing</small>
+                        </div>
+                    `;
+                } else {
+                    statusElement.innerHTML = `
+                        <div class="alert alert-success">
+                            <i class="fas fa-check"></i> 
+                            No active editing sessions
+                            <br><small>Auto-cleanup enabled</small>
+                        </div>
+                    `;
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error checking editing status:', error);
     }
 }
 
@@ -6943,6 +7186,18 @@ function updateTableActionsVisibility() {
         currentOrphanedRecords = [];
     }
 }
+
+// Clean up editing session when page is unloaded
+window.addEventListener('beforeunload', () => {
+    if (window.currentEditingProjectId) {
+        // Use navigator.sendBeacon for reliable cleanup on page unload
+        const userId = getCurrentUserId();
+        if (userId) {
+            const data = JSON.stringify({ user_id: userId });
+            navigator.sendBeacon(`${API_BASE_URL}/projects/${window.currentEditingProjectId}/editing/end`, data);
+        }
+    }
+});
 
 // ========== Global Function Assignments for View Project Modal ==========
 // These functions need to be available globally for onclick handlers in the view project modal

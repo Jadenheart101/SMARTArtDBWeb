@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Image Gallery Placement</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .form-group { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background: #f9f9f9; }
+        .project-image-container { border: 2px solid #007bff; padding: 15px; margin: 10px 0; border-radius: 8px; background: white; }
+        .image-management-controls { margin-bottom: 1rem; padding: 10px; background: #e3f2fd; border-radius: 4px; }
+        .btn { padding: 8px 16px; background: #007bff; color: white; border: none; cursor: pointer; margin: 5px; border-radius: 4px; }
+        .btn-primary { background: #007bff; }
+        .btn-secondary { background: #6c757d; }
+        .btn-info { background: #17a2b8; }
+        .btn:hover { opacity: 0.8; }
+        
+        .image-gallery { 
+            display: none; 
+            background: #f8f9fa; 
+            padding: 15px; 
+            margin-bottom: 1rem; 
+            border: 2px dashed #28a745; 
+            border-radius: 8px;
+        }
+        .image-gallery.show { display: block; }
+        .gallery-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .gallery-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); 
+            gap: 10px; 
+            max-height: 300px; 
+            overflow-y: auto; 
+        }
+        .gallery-image-item { 
+            border: 1px solid #ddd; 
+            padding: 8px; 
+            cursor: pointer; 
+            text-align: center; 
+            border-radius: 4px;
+            background: white;
+        }
+        .gallery-image-item:hover { background: #e9ecef; }
+        .gallery-image-item img { width: 100%; height: 80px; object-fit: cover; border-radius: 4px; }
+        .gallery-image-name { font-size: 12px; margin-top: 5px; }
+        
+        .project-image-thumbnail { 
+            display: none; 
+            margin-top: 10px; 
+            padding: 15px; 
+            background: #fff3cd; 
+            border: 2px solid #ffc107; 
+            border-radius: 8px;
+        }
+        .project-image-thumbnail.show { display: block; }
+        .project-image-thumbnail img { width: 100%; max-width: 200px; height: auto; border-radius: 4px; }
+        .thumbnail-actions { margin-top: 10px; }
+        
+        .layout-indicator { 
+            font-weight: bold; 
+            color: #495057; 
+            margin: 10px 0; 
+            padding: 5px 10px; 
+            background: #e2e3e5; 
+            border-left: 4px solid #6c757d; 
+        }
+    </style>
+</head>
+<body>
+    <h1>Test: Image Gallery Positioned Below Change Image Button</h1>
+    
+    <div class="layout-indicator">
+        📍 Layout Flow Test: Button → Gallery → Thumbnail → Other Content
+    </div>
+    
+    <div class="form-group">
+        <label for="editProjectImage">Project Image</label>
+        <div class="project-image-container">
+            <div class="layout-indicator">1️⃣ Always Visible Image Management Button</div>
+            <!-- Always visible image management button -->
+            <div class="image-management-controls">
+                <button type="button" class="btn btn-primary" onclick="toggleGallery()">
+                    <i class="fas fa-images"></i> <span id="editImageButtonText">Add/Change Image</span>
+                </button>
+                <span style="margin-left: 10px; color: #6c757d;">← Click to show/hide gallery</span>
+            </div>
+            
+            <div class="layout-indicator">2️⃣ Image Gallery (Appears Right Below Button)</div>
+            <!-- Image Gallery - positioned right below the button -->
+            <div class="image-gallery" id="editImageGallery">
+                <div class="gallery-header">
+                    <h4>Choose an image from your gallery:</h4>
+                    <button type="button" class="btn btn-secondary" onclick="hideGallery()">Cancel</button>
+                </div>
+                <div class="gallery-grid" id="editImageGalleryGrid">
+                    <div class="gallery-image-item" onclick="selectImage('1', 'https://via.placeholder.com/150/FF5733', 'Red Square')">
+                        <img src="https://via.placeholder.com/150/FF5733" alt="Red Square">
+                        <div class="gallery-image-name">Red Square</div>
+                    </div>
+                    <div class="gallery-image-item" onclick="selectImage('2', 'https://via.placeholder.com/150/33FF57', 'Green Circle')">
+                        <img src="https://via.placeholder.com/150/33FF57" alt="Green Circle">
+                        <div class="gallery-image-name">Green Circle</div>
+                    </div>
+                    <div class="gallery-image-item" onclick="selectImage('3', 'https://via.placeholder.com/150/3357FF', 'Blue Triangle')">
+                        <img src="https://via.placeholder.com/150/3357FF" alt="Blue Triangle">
+                        <div class="gallery-image-name">Blue Triangle</div>
+                    </div>
+                    <div class="gallery-image-item" onclick="selectImage('4', 'https://via.placeholder.com/150/FF33F5', 'Purple Diamond')">
+                        <img src="https://via.placeholder.com/150/FF33F5" alt="Purple Diamond">
+                        <div class="gallery-image-name">Purple Diamond</div>
+                    </div>
+                    <div class="gallery-image-item" onclick="selectImage('5', 'https://via.placeholder.com/150/FFD700', 'Golden Star')">
+                        <img src="https://via.placeholder.com/150/FFD700" alt="Golden Star">
+                        <div class="gallery-image-name">Golden Star</div>
+                    </div>
+                    <div class="gallery-image-item" onclick="selectImage('6', 'https://via.placeholder.com/150/FF8C00', 'Orange Oval')">
+                        <img src="https://via.placeholder.com/150/FF8C00" alt="Orange Oval">
+                        <div class="gallery-image-name">Orange Oval</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="layout-indicator">3️⃣ Selected Image Thumbnail (Shows After Selection)</div>
+            <!-- Image thumbnail display when image is linked -->
+            <div class="project-image-thumbnail" id="editProjectImageThumbnail">
+                <img id="editProjectThumbnailImg" src="" alt="Project image">
+                <div class="thumbnail-actions">
+                    <button type="button" class="btn btn-info" id="editAddArtInfoBtn">
+                        <i class="fas fa-palette"></i> Add Art Info
+                    </button>
+                    <button type="button" class="btn btn-info" id="editEditArtInfoBtn">
+                        <i class="fas fa-edit"></i> Edit Art Info
+                    </button>
+                </div>
+            </div>
+            
+            <div class="layout-indicator">4️⃣ Other Content Appears Below</div>
+        </div>
+        <input type="hidden" id="editSelectedImageId" name="selectedImageId">
+    </div>
+
+    <div class="form-group" style="background: #e8f5e8;">
+        <h3>Topics Section (This would come next)</h3>
+        <p>This represents the Topics section that comes after the Project Image section.</p>
+        <p>Notice how the gallery appears in the correct position within the image container, not pushing this section down unnecessarily.</p>
+    </div>
+
+    <script>
+        function toggleGallery() {
+            const gallery = document.getElementById('editImageGallery');
+            if (gallery.classList.contains('show')) {
+                hideGallery();
+            } else {
+                showGallery();
+            }
+        }
+        
+        function showGallery() {
+            const gallery = document.getElementById('editImageGallery');
+            gallery.classList.add('show');
+            console.log('✅ Gallery shown right below the button');
+        }
+        
+        function hideGallery() {
+            const gallery = document.getElementById('editImageGallery');
+            gallery.classList.remove('show');
+            console.log('🔒 Gallery hidden');
+        }
+        
+        function selectImage(imageId, imageUrl, imageName) {
+            console.log('🖼️ selectImage called with:', { imageId, imageUrl, imageName });
+            
+            // Update hidden input
+            const hiddenInput = document.getElementById('editSelectedImageId');
+            if (hiddenInput) {
+                hiddenInput.value = imageId;
+            }
+            
+            // Show thumbnail
+            const thumbnail = document.getElementById('editProjectImageThumbnail');
+            const thumbnailImg = document.getElementById('editProjectThumbnailImg');
+            const buttonText = document.getElementById('editImageButtonText');
+            
+            if (thumbnail && thumbnailImg) {
+                thumbnailImg.src = imageUrl;
+                thumbnailImg.alt = imageName;
+                thumbnail.classList.add('show');
+                console.log('✅ Thumbnail shown for selected image');
+            }
+            
+            if (buttonText) {
+                buttonText.textContent = 'Change Image';
+                console.log('🔄 Button text updated to "Change Image"');
+            }
+            
+            hideGallery();
+            
+            // Show success message
+            const message = document.createElement('div');
+            message.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #28a745; color: white; padding: 10px 20px; border-radius: 4px; z-index: 1000;';
+            message.textContent = `✅ Selected: ${imageName}`;
+            document.body.appendChild(message);
+            
+            setTimeout(() => {
+                document.body.removeChild(message);
+            }, 3000);
+        }
+        
+        console.log('🧪 Layout test loaded. Click "Add/Change Image" to test the gallery positioning.');
+        console.log('📍 Expected flow: Button → Gallery → Thumbnail → Other Content');
+    </script>
+</body>
+</html>

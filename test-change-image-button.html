@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Change Image Button</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; }
+        .btn { padding: 8px 16px; background: #007bff; color: white; border: none; cursor: pointer; }
+        .btn:hover { background: #0056b3; }
+        .hidden { display: none; }
+        .gallery { display: none; background: #f5f5f5; padding: 20px; margin: 10px 0; }
+        .gallery.show { display: block; }
+    </style>
+</head>
+<body>
+    <h1>Test Change Image Button Functionality</h1>
+    
+    <div class="test-section">
+        <h2>1. Test Basic Button Click</h2>
+        <button onclick="testBasicClick()" class="btn">Test Basic Click</button>
+        <div id="basicClickResult"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. Test changeEditProjectImage Function</h2>
+        <button onclick="changeEditProjectImage()" class="btn">Change Edit Project Image</button>
+        <div id="changeImageResult"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. Test Elements Existence</h2>
+        <button onclick="testElementsExist()" class="btn">Check Elements</button>
+        <div id="elementsResult"></div>
+        
+        <!-- Mock Edit Project Modal Elements -->
+        <div id="editImageGallery" class="gallery">
+            <h3>Edit Image Gallery (Mock)</h3>
+            <div id="editImageGalleryGrid">Gallery grid content here</div>
+        </div>
+        <button id="editAddImageBtn" class="btn">Add Image (Mock)</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>4. Test showEditImageGallery Function</h2>
+        <button onclick="showEditImageGallery()" class="btn">Show Edit Image Gallery</button>
+        <div id="showGalleryResult"></div>
+    </div>
+
+    <script>
+        // Set up mock localStorage for testing
+        localStorage.setItem('currentUser', JSON.stringify({
+            id: 1,
+            name: 'Test User'
+        }));
+        
+        // Mock API_BASE_URL
+        const API_BASE_URL = 'http://localhost:8080/api';
+        
+        function testBasicClick() {
+            const result = document.getElementById('basicClickResult');
+            result.innerHTML = '<p style="color: green;">✅ Basic click works!</p>';
+        }
+        
+        function testElementsExist() {
+            const result = document.getElementById('elementsResult');
+            const gallery = document.getElementById('editImageGallery');
+            const addBtn = document.getElementById('editAddImageBtn');
+            const galleryGrid = document.getElementById('editImageGalleryGrid');
+            
+            result.innerHTML = `
+                <p>Gallery element: ${gallery ? '✅ Found' : '❌ Not found'}</p>
+                <p>Add button: ${addBtn ? '✅ Found' : '❌ Not found'}</p>
+                <p>Gallery grid: ${galleryGrid ? '✅ Found' : '❌ Not found'}</p>
+            `;
+        }
+        
+        function showNotification(message, type) {
+            console.log(`Notification [${type}]: ${message}`);
+            alert(`${type.toUpperCase()}: ${message}`);
+        }
+        
+        // Copy the actual functions from script.js for testing
+        function showEditImageGallery() {
+            console.log('🖼️ showEditImageGallery called');
+            
+            const gallery = document.getElementById('editImageGallery');
+            const addBtn = document.getElementById('editAddImageBtn');
+            
+            console.log('📋 Gallery elements check:', {
+                gallery: !!gallery,
+                addBtn: !!addBtn
+            });
+            
+            if (!gallery) {
+                console.error('❌ editImageGallery element not found in showEditImageGallery');
+                showNotification('Image gallery element not found. Please refresh the page.', 'error');
+                return;
+            }
+            
+            if (!addBtn) {
+                console.error('❌ editAddImageBtn element not found in showEditImageGallery');
+                showNotification('Add image button element not found. Please refresh the page.', 'error');
+                return;
+            }
+            
+            console.log('✅ Both elements found, showing gallery');
+            gallery.style.display = 'block';
+            addBtn.style.display = 'none';
+            
+            // Load user's images
+            console.log('📤 Loading edit image gallery');
+            loadEditImageGallery();
+        }
+        
+        function changeEditProjectImage() {
+            console.log('🔄 changeEditProjectImage called');
+            
+            // Check if elements exist before proceeding
+            const gallery = document.getElementById('editImageGallery');
+            const addBtn = document.getElementById('editAddImageBtn');
+            
+            console.log('📋 Elements check:', {
+                gallery: !!gallery,
+                addBtn: !!addBtn,
+                galleryDisplay: gallery ? gallery.style.display : 'N/A',
+                addBtnDisplay: addBtn ? addBtn.style.display : 'N/A'
+            });
+            
+            if (!gallery) {
+                console.error('❌ editImageGallery element not found');
+                showNotification('Image gallery not found. Please refresh the page.', 'error');
+                return;
+            }
+            
+            if (!addBtn) {
+                console.error('❌ editAddImageBtn element not found');
+                showNotification('Add image button not found. Please refresh the page.', 'error');
+                return;
+            }
+            
+            showEditImageGallery();
+        }
+        
+        async function loadEditImageGallery() {
+            console.log('📂 loadEditImageGallery started');
+            
+            const galleryGrid = document.getElementById('editImageGalleryGrid');
+            const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+            
+            console.log('📋 Gallery load elements check:', {
+                galleryGrid: !!galleryGrid,
+                currentUser: !!currentUser,
+                userId: currentUser?.id
+            });
+            
+            if (!galleryGrid) {
+                console.error('❌ editImageGalleryGrid element not found');
+                return;
+            }
+            
+            if (!currentUser) {
+                console.error('❌ No current user found in localStorage');
+                galleryGrid.innerHTML = '<div class="gallery-empty">Please log in to view images</div>';
+                return;
+            }
+
+            try {
+                console.log('📤 Loading images for user:', currentUser.id);
+                galleryGrid.innerHTML = '<div class="gallery-loading"><i class="fas fa-spinner fa-spin"></i> Loading images...</div>';
+                
+                const apiUrl = `${API_BASE_URL}/media/files?userId=${currentUser.id}`;
+                console.log('🌐 Making request to:', apiUrl);
+                
+                const response = await fetch(apiUrl);
+                console.log('📨 Response status:', response.status, response.statusText);
+                
+                const result = await response.json();
+                console.log('📊 API Response:', {
+                    success: result.success,
+                    filesCount: result.files?.length,
+                    message: result.message
+                });
+                
+                if (result.success && result.files) {
+                    const imageFiles = result.files.filter(file => 
+                        file.mimeType && file.mimeType.startsWith('image/')
+                    );
+                    
+                    console.log('🖼️ Image files found:', imageFiles.length);
+                    
+                    if (imageFiles.length === 0) {
+                        galleryGrid.innerHTML = '<div class="gallery-empty">No images found. Upload some images first!</div>';
+                        return;
+                    }
+                    
+                    console.log('🎨 Rendering gallery with', imageFiles.length, 'images');
+                    galleryGrid.innerHTML = imageFiles.map(file => `
+                        <div class="gallery-image-item" onclick="selectEditImage('${file.id}', '${file.url}', '${file.customName || file.originalName || file.name}')">
+                            <img src="${file.url}" alt="${file.customName || file.originalName || file.name}" loading="lazy" style="width:100px;height:100px;object-fit:cover;">
+                            <div class="gallery-image-name">${file.customName || file.originalName || file.name}</div>
+                        </div>
+                    `).join('');
+                    
+                    console.log('✅ Gallery rendered successfully');
+                } else {
+                    console.error('❌ API request failed:', result.message);
+                    galleryGrid.innerHTML = '<div class="gallery-empty">Failed to load images: ' + (result.message || 'Unknown error') + '</div>';
+                }
+            } catch (error) {
+                console.error('❌ Error loading edit images:', error);
+                galleryGrid.innerHTML = '<div class="gallery-empty">Error loading images: ' + error.message + '</div>';
+            }
+        }
+        
+        function selectEditImage(imageId, imageUrl, imageName) {
+            console.log('🖼️ selectEditImage called with:', { imageId, imageUrl, imageName });
+            alert(`Selected image: ${imageName} (ID: ${imageId})`);
+        }
+    </script>
+</body>
+</html>
