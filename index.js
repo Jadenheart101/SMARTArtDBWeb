@@ -44,18 +44,29 @@ async function getNextAvailableId(tableName, idColumn) {
 }
 
 // Helper function for automatic storage cleanup
+const ENABLE_AUTO_CLEANUP = false; // Temporarily disabled for debugging
+
 async function performAutomaticStorageCleanup() {
+  if (!ENABLE_AUTO_CLEANUP) {
+    console.log('🧹 CLEANUP: Auto-cleanup disabled for debugging');
+    return { deletedCount: 0, totalOrphaned: 0 };
+  }
+  
   try {
-    console.log('🧹 Starting automatic storage cleanup...');
+    console.log('🧹 CLEANUP: Starting automatic storage cleanup...');
     
     // Get all files referenced in the database
-    const dbFiles = await executeQuery('SELECT file_path FROM media_files WHERE file_path IS NOT NULL');
+    const dbFiles = await executeQuery('SELECT id, file_path, file_name FROM media_files WHERE file_path IS NOT NULL');
+    console.log('🧹 CLEANUP: Found', dbFiles.length, 'files in database');
+    
     const dbFilePaths = new Set(dbFiles.map(row => {
       // Normalize path - remove leading slash and convert to forward slashes
       let path = row.file_path;
       if (path.startsWith('/')) path = path.substring(1);
       return path.replace(/\\/g, '/');
     }));
+    
+    console.log('🧹 CLEANUP: Database file paths:', Array.from(dbFilePaths).slice(0, 5), '...');
     
     // Recursively scan uploads directory
     const orphanedFiles = [];
@@ -77,7 +88,15 @@ async function performAutomaticStorageCleanup() {
               : `uploads/${relativeFilePath}`;
               
             if (!dbFilePaths.has(uploadRelativePath) && !dbFilePaths.has(relativeFilePath)) {
+              console.log('🧹 CLEANUP: ❌ Found orphaned file:', {
+                fullPath,
+                relativeFilePath,
+                uploadRelativePath,
+                inDatabase: dbFilePaths.has(uploadRelativePath) || dbFilePaths.has(relativeFilePath)
+              });
               orphanedFiles.push(fullPath);
+            } else {
+              console.log('🧹 CLEANUP: ✅ File is referenced in database:', relativeFilePath);
             }
           }
         }
@@ -89,13 +108,16 @@ async function performAutomaticStorageCleanup() {
     const uploadsDir = path.join(process.cwd(), 'uploads');
     await scanDirectory(uploadsDir, 'uploads');
     
+    console.log('🧹 CLEANUP: Scan complete. Found', orphanedFiles.length, 'orphaned files');
+    
     // Delete orphaned files
     let deletedCount = 0;
     for (const filePath of orphanedFiles) {
       try {
+        console.log('🧹 CLEANUP: 🗑️ Deleting orphaned file:', filePath);
         await fs.promises.unlink(filePath);
         deletedCount++;
-        console.log(`🗑️ Auto-deleted orphaned file: ${filePath}`);
+        console.log(`🧹 CLEANUP: ✅ Auto-deleted orphaned file: ${filePath}`);
       } catch (error) {
         console.error(`❌ Failed to auto-delete ${filePath}:`, error.message);
       }
@@ -407,15 +429,20 @@ app.get('/api/art', async (req, res) => {
 app.get('/api/art/media/:mediaId', async (req, res) => {
   try {
     const mediaId = req.params.mediaId;
+    console.log('🎨 GET /api/art/media/:mediaId called with mediaId:', mediaId);
+    
     const artwork = await executeQuery('SELECT * FROM art WHERE artcol = ?', [mediaId]);
+    console.log('🎨 Database query result:', artwork.length, 'artworks found');
     
     if (artwork.length === 0) {
+      console.log('🎨 No artwork found for media ID:', mediaId);
       return res.status(404).json({ success: false, message: 'No artwork found for this media file' });
     }
     
+    console.log('🎨 Found artwork:', artwork[0]);
     res.json({ success: true, data: artwork[0] });
   } catch (error) {
-    console.error('Error fetching artwork by media ID:', error);
+    console.error('❌ Error fetching artwork by media ID:', error);
     res.status(500).json({ success: false, message: 'Error fetching artwork', error: error.message });
   }
 });
@@ -435,22 +462,41 @@ app.get('/api/art/:id', async (req, res) => {
 app.post('/api/art', async (req, res) => {
   const { ArtistName, Submitor, Date: artDate, ArtMedia, ArtName, artcol } = req.body;
   
+  console.log('🎨 ART INFO: POST /api/art received:', {
+    ArtistName,
+    Submitor,
+    artDate,
+    ArtMedia,
+    ArtName,
+    artcol,
+    bodyKeys: Object.keys(req.body)
+  });
+  
   if (!ArtistName || !ArtName) {
+    console.log('🎨 ART INFO: ❌ Missing required fields');
     return res.status(400).json({ success: false, message: 'ArtistName and ArtName are required' });
   }
   
   try {
+    console.log('🎨 ART INFO: Getting next available ArtId');
     // Get next available ArtId
     const nextArtId = await getNextAvailableId('art', 'ArtId');
+    
+    console.log('🎨 ART INFO: 📤 Inserting art record with ID:', nextArtId);
     
     const result = await executeQuery(
       'INSERT INTO art (ArtId, ArtistName, Submitor, Date, ArtMedia, ArtName, artcol) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [nextArtId, ArtistName, Submitor || null, artDate || new Date().toISOString().split('T')[0], ArtMedia || null, ArtName, artcol || null]
     );
     
+    console.log('🎨 ART INFO: Insert result:', { insertId: result.insertId, affectedRows: result.affectedRows });
+    
     const newArtwork = await executeQuery('SELECT * FROM art WHERE ArtId = ?', [nextArtId]);
+    console.log('🎨 ART INFO: ✅ Art record created successfully:', newArtwork[0]);
+    
     res.status(201).json({ success: true, data: newArtwork[0] });
   } catch (error) {
+    console.error('🎨 ART INFO: ❌ Error creating artwork:', error);
     res.status(500).json({ success: false, message: 'Error creating artwork', error: error.message });
   }
 });
@@ -574,22 +620,34 @@ app.get('/api/projects', async (req, res) => {
 });
 
 app.post('/api/projects', async (req, res) => {
-  const { ProjectName, Approved, NeedsReview, user_id } = req.body;
+  const { ProjectName, Description, Approved, NeedsReview, user_id } = req.body;
   if (!ProjectName || !user_id) {
     return res.status(400).json({ success: false, message: 'ProjectName and user_id are required' });
   }
+  
+  console.log('📝 POST /api/projects received:', {
+    ProjectName,
+    Description,
+    user_id,
+    Approved,
+    NeedsReview
+  });
+  
   try {
     // Get next available ProjectID
     const nextProjectId = await getNextAvailableId('project', 'ProjectID');
     
     const today = new Date().toISOString().split('T')[0];
     const result = await executeQuery(
-      'INSERT INTO project (ProjectID, ProjectName, user_id, Approved, NeedsReview, DateCreated, DateModified) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [nextProjectId, ProjectName, user_id, Approved || 0, NeedsReview || 1, today, today]
+      'INSERT INTO project (ProjectID, ProjectName, Description, user_id, Approved, NeedsReview, DateCreated, DateModified) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [nextProjectId, ProjectName, Description || '', user_id, Approved || 0, NeedsReview || 1, today, today]
     );
     const newProject = await executeQuery('SELECT * FROM project WHERE ProjectID = ?', [nextProjectId]);
+    
+    console.log('📝 Created project with data:', newProject[0]);
     res.status(201).json({ success: true, data: newProject[0] });
   } catch (error) {
+    console.error('❌ Error creating project:', error);
     res.status(500).json({ success: false, message: 'Error creating project', error: error.message });
   }
 });
@@ -599,6 +657,14 @@ app.put('/api/projects/:id', async (req, res) => {
   try {
     const projectId = req.params.id;
     const { ProjectName, Description, ImageID } = req.body;
+    
+    console.log('📝 PUT /api/projects/:id received:', {
+      projectId,
+      ProjectName,
+      Description,
+      ImageID,
+      bodyKeys: Object.keys(req.body)
+    });
     
     if (!ProjectName) {
       return res.status(400).json({ success: false, message: 'Project name is required' });
@@ -613,8 +679,30 @@ app.put('/api/projects/:id', async (req, res) => {
     }
     
     if (ImageID !== undefined) {
+      let actualImageId = ImageID;
+      
+      // If ImageID is a string (filename), look up the actual media_files.id
+      if (typeof ImageID === 'string' && isNaN(parseInt(ImageID))) {
+        console.log('Converting filename to media ID:', ImageID);
+        const mediaResult = await executeQuery(
+          'SELECT id FROM media_files WHERE file_name = ?',
+          [ImageID]
+        );
+        
+        if (mediaResult.length > 0) {
+          actualImageId = mediaResult[0].id;
+          console.log('Found media ID:', actualImageId);
+        } else {
+          console.log('No media file found for filename:', ImageID);
+          return res.status(400).json({ 
+            success: false, 
+            message: `Image file '${ImageID}' not found in media database` 
+          });
+        }
+      }
+      
       updateFields.push('image_id = ?');
-      updateValues.push(ImageID);
+      updateValues.push(actualImageId);
     }
     
     updateFields.push('DateModified = ?');
@@ -626,6 +714,13 @@ app.put('/api/projects/:id', async (req, res) => {
       `UPDATE project SET ${updateFields.join(', ')} WHERE ProjectID = ?`,
       updateValues
     );
+    
+    console.log('📝 Database update result:', {
+      affectedRows: result.affectedRows,
+      updateFields: updateFields,
+      updateValues: updateValues,
+      projectId
+    });
     
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: 'Project not found' });
@@ -1192,7 +1287,7 @@ app.get('/api/projects/:id/topics', async (req, res) => {
       // For each POI, get its cards (using actual column names)
       const poisWithCards = await Promise.all(pois.map(async (poi) => {
         const cards = await executeQuery(
-          'SELECT *, id as CardID, poi_id as POIID_FK, card_title as Title, card_content as Body FROM card WHERE poi_id = ? ORDER BY card_order, id',
+          'SELECT *, id as CardID, poi_id as POIID_FK, card_title as Title, card_content as Body, user_notes as Notes, refs as `References` FROM card WHERE poi_id = ? ORDER BY card_order, id',
           [poi.POIID]
         );
         
@@ -1230,20 +1325,36 @@ app.post('/api/projects/:id/topics', async (req, res) => {
     const projectId = req.params.id;
     const { Label, topic_title, topic_content } = req.body;
     
+    console.log('📋 TOPIC: POST /api/projects/:id/topics received:', {
+      projectId,
+      Label,
+      topic_title,
+      topic_content,
+      bodyKeys: Object.keys(req.body)
+    });
+    
     const title = topic_title || Label || 'New Topic';
     const content = topic_content || '';
     
+    console.log('📋 TOPIC: Processed values:', { title, content });
+    
     if (!title) {
+      console.log('📋 TOPIC: ❌ Missing topic title');
       return res.status(400).json({ success: false, message: 'Topic title is required' });
     }
     
+    console.log('📋 TOPIC: Getting next available topic ID');
     // Get next available topic ID
     const nextTopicId = await getNextAvailableId('project_topics', 'id');
+    
+    console.log('📋 TOPIC: 📤 Inserting topic with ID:', nextTopicId);
     
     const result = await executeQuery(
       'INSERT INTO project_topics (id, project_id, topic_title, topic_content, topic_order) VALUES (?, ?, ?, ?, ?)',
       [nextTopicId, projectId, title, content, 0]
     );
+    
+    console.log('📋 TOPIC: Insert result:', { insertId: result.insertId, affectedRows: result.affectedRows });
     
     const newTopic = await executeQuery(
       'SELECT *, id as TopicID, project_id as ProjectID_FK, topic_title as Label FROM project_topics WHERE id = ?',
@@ -1378,6 +1489,17 @@ app.put('/api/pois/:id', async (req, res) => {
     const poiId = req.params.id;
     const { XCoord, YCoord, pImage, pLocation, poi_title, poi_content } = req.body;
     
+    console.log('📍 PUT /api/pois/:id received:', {
+      poiId,
+      XCoord,
+      YCoord,
+      pImage,
+      pLocation,
+      poi_title,
+      poi_content,
+      bodyKeys: Object.keys(req.body)
+    });
+    
     const updateFields = [];
     const updateValues = [];
     
@@ -1389,6 +1511,11 @@ app.put('/api/pois/:id', async (req, res) => {
     if (YCoord !== undefined) {
       updateFields.push('y_coordinate = ?');
       updateValues.push(YCoord);
+    }
+    
+    if (pImage !== undefined) {
+      updateFields.push('pImage = ?');
+      updateValues.push(pImage);
     }
     
     if (pLocation !== undefined) {
@@ -1407,10 +1534,14 @@ app.put('/api/pois/:id', async (req, res) => {
     }
     
     if (updateFields.length === 0) {
+      console.log('📍 No fields to update for POI:', poiId);
       return res.status(400).json({ success: false, message: 'No fields to update' });
     }
     
     updateValues.push(poiId);
+    
+    console.log('📍 Updating POI with fields:', updateFields);
+    console.log('📍 Update values:', updateValues);
     
     const result = await executeQuery(
       `UPDATE poi SET ${updateFields.join(', ')} WHERE id = ?`,
@@ -1491,6 +1622,19 @@ app.put('/api/cards/:id', async (req, res) => {
     const cardId = req.params.id;
     const { Title, Body, Type, Notes, References, card_title, card_content, card_order } = req.body;
     
+    console.log('📄 PUT /api/cards/:id received:', {
+      cardId,
+      Title,
+      Body,
+      Type,
+      Notes,
+      References,
+      card_title,
+      card_content,
+      card_order,
+      bodyKeys: Object.keys(req.body)
+    });
+    
     const updateFields = [];
     const updateValues = [];
     
@@ -1509,22 +1653,44 @@ app.put('/api/cards/:id', async (req, res) => {
       updateValues.push(card_order);
     }
     
+    if (Type !== undefined) {
+      updateFields.push('card_type = ?');
+      updateValues.push(Type);
+    }
+    
+    if (Notes !== undefined) {
+      updateFields.push('user_notes = ?');
+      updateValues.push(Notes);
+    }
+    
+    if (References !== undefined) {
+      updateFields.push('refs = ?');
+      updateValues.push(References);
+    }
+    
     if (updateFields.length === 0) {
+      console.log('📄 No fields to update for card:', cardId);
       return res.status(400).json({ success: false, message: 'No fields to update' });
     }
     
     updateValues.push(cardId);
+    
+    console.log('📄 Updating card with fields:', updateFields);
+    console.log('📄 Update values:', updateValues);
     
     const result = await executeQuery(
       `UPDATE card SET ${updateFields.join(', ')} WHERE id = ?`,
       updateValues
     );
     
+    console.log('📄 Card update result:', result);
+    
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: 'Card not found' });
     }
     
     const updatedCard = await executeQuery('SELECT *, id as CardID, poi_id as POIID_FK, card_title as Title, card_content as Body FROM card WHERE id = ?', [cardId]);
+    console.log('📄 Updated card data:', updatedCard[0]);
     res.json({ success: true, data: updatedCard[0] });
   } catch (error) {
     console.error('Error updating card:', error);

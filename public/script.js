@@ -831,21 +831,8 @@ function setupEventListeners() {
         });
     }
 
-    // Dashboard Form Handlers
-    const createArtworkForm = document.getElementById('createArtworkForm');
-    if (createArtworkForm) {
-        createArtworkForm.addEventListener('submit', handleCreateArtwork);
-    }
-    
-    const createProjectForm = document.getElementById('createProjectForm');
-    if (createProjectForm) {
-        createProjectForm.addEventListener('submit', handleCreateProject);
-    }
-    
-    const editProjectForm = document.getElementById('editProjectForm');
-    if (editProjectForm) {
-        editProjectForm.addEventListener('submit', handleEditProject);
-    }
+    // Dashboard Form Handlers - These are now handled in initializeDashboardEventListeners()
+    // after the dashboard content is actually loaded
     
     // Close modals when clicking outside
     const createArtworkModal = document.getElementById('createArtworkModal');
@@ -1185,18 +1172,22 @@ async function editProject(projectID) {
 
             // Populate form fields
             document.getElementById('editProjectName').value = project.ProjectName || '';
+            console.log('📝 Loaded ProjectName:', project.ProjectName);
+            
             // Populate description if available
             const descInput = document.getElementById('editProjectDescription');
-            if (descInput) descInput.value = project.Description || '';
+            if (descInput) {
+                descInput.value = project.Description || '';
+                console.log('📝 Loaded Description:', project.Description, 'into field:', descInput.value);
+            }
             
-            // Populate image filename (not ImageID) for art info consistency
+            // Populate ImageID for proper database reference
             const imgInput = document.getElementById('editSelectedImageId');
-            if (imgInput && project.ImageURL) {
-                // Extract filename from ImageURL for consistent art info lookup
-                const urlParts = project.ImageURL.split('/');
-                const filename = urlParts[urlParts.length - 1];
-                imgInput.value = filename;
-                console.log('🖼️ Set editSelectedImageId to filename:', filename, 'instead of ImageID:', project.ImageID);
+            if (imgInput && project.ImageID) {
+                imgInput.value = project.ImageID;
+                console.log('🖼️ Set editSelectedImageId to ImageID:', project.ImageID);
+            } else {
+                console.log('🔍 No ImageID found or imgInput missing. ImageID:', project.ImageID, 'imgInput:', !!imgInput);
             }
             
             // Show/hide image selection based on whether project has an image
@@ -1328,22 +1319,11 @@ async function loadEditImageGallery() {
 function selectEditImage(imageId, imageUrl, imageName) {
     console.log('🖼️ selectEditImage called with:', { imageId, imageUrl, imageName });
     
-    // Extract filename from imageName or imageUrl
-    let filename = imageName;
-    
-    // If imageName doesn't look like a filename (no extension), try to extract from URL
-    if (!filename || !filename.includes('.')) {
-        const urlParts = imageUrl.split('/');
-        filename = urlParts[urlParts.length - 1];
-    }
-    
-    console.log('📁 Using filename for art info lookup:', filename);
-    
-    // Set the hidden input value to the filename (not imageId)
+    // Set the hidden input value to the imageId (numeric ID for database)
     const hiddenInput = document.getElementById('editSelectedImageId');
     if (hiddenInput) {
-        hiddenInput.value = filename;  // Use filename instead of imageId
-        console.log('✅ Set editSelectedImageId to:', filename);
+        hiddenInput.value = imageId;  // Use imageId instead of filename
+        console.log('✅ Set editSelectedImageId to:', imageId);
     }
     
     // Show thumbnail
@@ -1360,6 +1340,83 @@ function selectEditImage(imageId, imageUrl, imageName) {
     hideEditImageGallery();
     
     showNotification(`Image "${imageName}" selected for project`, 'success');
+}
+
+// Show art info modal for the currently selected image in edit project modal
+function showAddArtInfoForSelectedImage() {
+    console.log('🎨 showAddArtInfoForSelectedImage called');
+    
+    const selectedImageInput = document.getElementById('editSelectedImageId');
+    if (!selectedImageInput || !selectedImageInput.value) {
+        console.warn('🎨 No image selected for this project');
+        showNotification('Please select an image first', 'error');
+        return;
+    }
+    
+    // Get the image info from the thumbnail display
+    const thumbnailImg = document.getElementById('editProjectThumbnailImg');
+    if (!thumbnailImg || !thumbnailImg.src) {
+        console.warn('🎨 No thumbnail image found');
+        showNotification('Please select an image first', 'error');
+        return;
+    }
+    
+    console.log('🎨 Selected image details:', {
+        imageId: selectedImageInput.value,
+        imageSrc: thumbnailImg.src,
+        imageAlt: thumbnailImg.alt
+    });
+    
+    // Create image info object for art info modal
+    const imageInfo = {
+        id: selectedImageInput.value,
+        src: thumbnailImg.src,
+        name: thumbnailImg.alt || 'Selected Image',
+        file_name: thumbnailImg.alt
+    };
+    
+    // Set currentArtInfoImage and show modal
+    currentArtInfoImage = imageInfo;
+    
+    const modal = document.getElementById('addArtInfoModal');
+    if (modal) {
+        modal.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+        
+        // Update modal content with image info
+        updateArtInfoModal();
+        checkExistingArtInfo();
+    }
+}
+
+// Update art info modal with current image information
+function updateArtInfoModal() {
+    console.log('🎨 updateArtInfoModal called with currentArtInfoImage:', currentArtInfoImage);
+    
+    if (!currentArtInfoImage) {
+        console.warn('🎨 No currentArtInfoImage available for modal update');
+        return;
+    }
+    
+    // Update the modal's image display if there's an element for it
+    const modalImageDisplay = document.getElementById('artInfoImageDisplay');
+    if (modalImageDisplay) {
+        modalImageDisplay.innerHTML = `
+            <img src="${currentArtInfoImage.src}" alt="${currentArtInfoImage.name}" 
+                 style="max-width: 200px; max-height: 150px; object-fit: cover; border-radius: 4px;">
+            <p style="margin-top: 8px; font-size: 14px; color: #666;">
+                Adding art info for: ${currentArtInfoImage.name}
+            </p>
+        `;
+    }
+    
+    // Update modal title to include image name
+    const modalTitle = document.querySelector('#addArtInfoModal h2');
+    if (modalTitle) {
+        modalTitle.innerHTML = `<i class="fas fa-palette"></i> Add Art Information - ${currentArtInfoImage.name}`;
+    }
+    
+    console.log('🎨 Modal updated with image info');
 }
 
 // Change edit project image
@@ -1449,6 +1506,55 @@ function initializeDashboardEventListeners() {
     }
     
     // Set up any other dashboard-specific event listeners here
+    
+    // Set up edit project form event listener
+    const editProjectForm = document.getElementById('editProjectForm');
+    if (editProjectForm) {
+        console.log('✅ Found editProjectForm, setting up event listeners');
+        
+        // Remove any existing event listeners to prevent duplicates
+        editProjectForm.removeEventListener('submit', handleEditProject);
+        
+        // Add the form submit event listener
+        editProjectForm.addEventListener('submit', handleEditProject);
+        
+        console.log('🎯 Edit project form event listeners attached successfully');
+    } else {
+        console.warn('❌ editProjectForm not found in DOM');
+    }
+    
+    // Set up create project form event listener
+    const createProjectForm = document.getElementById('createProjectForm');
+    if (createProjectForm) {
+        console.log('✅ Found createProjectForm, setting up event listeners');
+        
+        // Remove any existing event listeners to prevent duplicates
+        createProjectForm.removeEventListener('submit', handleCreateProject);
+        
+        // Add the form submit event listener
+        createProjectForm.addEventListener('submit', handleCreateProject);
+        
+        console.log('🎯 Create project form event listeners attached successfully');
+    } else {
+        console.warn('❌ createProjectForm not found in DOM');
+    }
+    
+    // Set up create artwork form event listener
+    const createArtworkForm = document.getElementById('createArtworkForm');
+    if (createArtworkForm) {
+        console.log('✅ Found createArtworkForm, setting up event listeners');
+        
+        // Remove any existing event listeners to prevent duplicates
+        createArtworkForm.removeEventListener('submit', handleCreateArtwork);
+        
+        // Add the form submit event listener
+        createArtworkForm.addEventListener('submit', handleCreateArtwork);
+        
+        console.log('🎯 Create artwork form event listeners attached successfully');
+    } else {
+        console.warn('❌ createArtworkForm not found in DOM');
+    }
+    
     // ...
 }
 
@@ -2690,13 +2796,22 @@ async function handleEditProject(event) {
         DateModified: new Date().toISOString().split('T')[0]
     };
     
+    console.log('📝 Form data extracted:', {
+        ProjectName: projectData.ProjectName,
+        Description: projectData.Description,
+        rawDescription: formData.get('editProjectDescription')
+    });
+
     // Add image ID if selected
     const selectedImageId = formData.get('selectedImageId');
     if (selectedImageId) {
         projectData.ImageID = selectedImageId;
+        console.log('🖼️ Adding ImageID to project data:', selectedImageId);
+    } else {
+        console.log('🔍 No selectedImageId found in form data');
     }
     
-    try {
+    console.log('📤 Sending project data to server:', projectData);    try {
         const response = await fetch(`${API_BASE_URL}/projects/${projectId}`, {
             method: 'PUT',
             headers: {
@@ -2761,20 +2876,34 @@ async function handleFileUpload(event) {
     const formData = new FormData(event.target);
     const currentUser = JSON.parse(localStorage.getItem('currentUser'));
     
+    console.log('📤 UPLOAD: Starting file upload process');
+    console.log('📤 UPLOAD: Current user:', currentUser ? currentUser.username : 'Not logged in');
+    
     if (!currentUser) {
         showNotification('Please log in to upload files', 'error');
         return;
     }
     
+    // Log form data details
+    const fileInput = event.target.querySelector('input[type="file"]');
+    const customNameInput = document.getElementById('mediaCustomName');
+    const folderPathInput = document.getElementById('folderPath');
+    
+    console.log('📤 UPLOAD: Form data details:', {
+        file: fileInput?.files[0]?.name || 'No file selected',
+        fileSize: fileInput?.files[0]?.size || 0,
+        customName: customNameInput?.value || 'None',
+        folderPath: folderPathInput?.value || 'None',
+        userId: currentUser.id
+    });
+
     // Add user ID to form data
     formData.append('userId', currentUser.id);
     // Add custom media name if provided
-    const customNameInput = document.getElementById('mediaCustomName');
     if (customNameInput && customNameInput.value.trim()) {
         formData.append('customName', customNameInput.value.trim());
-    }
-    
-    try {
+        console.log('📤 UPLOAD: Added custom name:', customNameInput.value.trim());
+    }    try {
         // Show progress
         const progress = document.getElementById('uploadProgress');
         const progressFill = document.getElementById('progressFill');
@@ -2802,18 +2931,27 @@ async function handleFileUpload(event) {
         
         const result = await response.json();
         
+        console.log('📤 UPLOAD: Server response:', {
+            success: result.success,
+            message: result.message,
+            data: result.data,
+            status: response.status
+        });
+        
         if (result.success) {
             if (progressFill) progressFill.style.width = '100%';
             if (progressText) progressText.textContent = 'Upload complete!';
             
+            console.log('📤 UPLOAD: Upload successful, refreshing gallery');
             showNotification('File uploaded successfully!', 'success');
             closeUploadModal();
             refreshMediaGallery();
         } else {
+            console.error('📤 UPLOAD: Upload failed:', result.message);
             showNotification(result.message || 'Upload failed', 'error');
         }
     } catch (error) {
-        console.error('Upload error:', error);
+        console.error('📤 UPLOAD: Upload error:', error);
         showNotification('Failed to upload file', 'error');
     } finally {
         const uploadBtn = document.getElementById('uploadBtn');
@@ -3578,6 +3716,8 @@ function showAddArtInfoModal(mediaFilename = null) {
 
 // Close Add Art Info Modal
 function closeAddArtInfoModal() {
+    console.log('🎨 ART INFO: Closing art info modal');
+    
     const modal = document.getElementById('addArtInfoModal');
     if (modal) {
         modal.style.display = 'none';
@@ -3586,7 +3726,16 @@ function closeAddArtInfoModal() {
     
     // Clear form
     document.getElementById('addArtInfoForm').reset();
+    
+    // Clear art info context (this does NOT affect project image selection)
+    console.log('🎨 ART INFO: Clearing currentArtInfoImage (art info context only)');
     currentArtInfoImage = null;
+    
+    // Check that project image selection is still intact
+    const selectedImageInput = document.getElementById('editSelectedImageId');
+    if (selectedImageInput) {
+        console.log('🎨 ART INFO: Project image selection preserved:', selectedImageInput.value);
+    }
     
     // Reset modal title
     const modalTitle = document.querySelector('#addArtInfoModal h2');
@@ -3742,15 +3891,15 @@ window.testSubmitArtInfo = function() {
 
 // Submit art information
 async function submitArtInfo() {
-    console.log('🎨 Starting art info submission...');
+    console.log('🎨 ART INFO: Starting art info submission...');
     
     const currentUser = JSON.parse(localStorage.getItem('currentUser'));
-    console.log('Current user:', currentUser);
-    console.log('Current art info image:', currentArtInfoImage);
+    console.log('🎨 ART INFO: Current user:', currentUser ? currentUser.username : 'Not logged in');
+    console.log('🎨 ART INFO: Current art info image:', currentArtInfoImage);
     
     if (!currentUser || !currentArtInfoImage) {
         const message = `Missing required information - User: ${!!currentUser}, Image: ${!!currentArtInfoImage}`;
-        console.error('❌', message);
+        console.error('🎨 ART INFO: ❌', message);
         showNotification(message, 'error');
         return;
     }
@@ -3767,17 +3916,25 @@ async function submitArtInfo() {
             artcol: currentArtInfoImage.id // Link to the media file
         };
 
-        console.log('📝 Form data prepared:', artData);
+        console.log('🎨 ART INFO: Form data prepared:', {
+            ArtistName: artData.ArtistName,
+            ArtName: artData.ArtName,
+            ArtMedia: artData.ArtMedia,
+            Submitor: artData.Submitor,
+            Date: artData.Date,
+            artcol: artData.artcol,
+            imageFileName: currentArtInfoImage.file_name
+        });
 
         // Validate required fields
         if (!artData.ArtistName || !artData.ArtName) {
             const message = 'Artist name and art title are required';
-            console.error('❌ Validation failed:', message);
+            console.error('🎨 ART INFO: ❌ Validation failed:', message);
             showNotification(message, 'error');
             return;
         }
 
-        console.log('📤 Checking if art info already exists...');
+        console.log('🎨 ART INFO: 📤 Checking if art info already exists...');
         
         // First check if there's existing art info for this media file
         let existingArt = null;
@@ -3989,13 +4146,19 @@ async function toggleTopic(topicId) {
 
 // Load topics for editing
 async function loadEditTopics(projectId) {
+    console.log('📋 Loading topics for project:', projectId);
     try {
         const response = await fetch(`${API_BASE_URL}/projects/${projectId}/topics`);
         const result = await response.json();
         
+        console.log('📋 Topics API response:', result);
+        
         if (result.success) {
             currentProjectTopics = result.data || [];
+            console.log('📋 Loaded topics:', currentProjectTopics.length, 'topics');
             displayEditTopics();
+        } else {
+            console.warn('📋 Failed to load topics:', result.message);
         }
     } catch (error) {
         console.error('Error loading edit topics:', error);
@@ -4193,14 +4356,28 @@ function displayEditCards(cards) {
 
 // Add new topic in edit mode
 async function addEditTopic() {
+    console.log('📋 TOPIC: Adding new topic to project');
+    
     const currentUser = JSON.parse(localStorage.getItem('currentUser'));
-    if (!currentUser || !window.currentEditingProjectId) {
+    const projectId = window.currentEditingProjectId;
+    
+    console.log('📋 TOPIC: Add topic details:', {
+        user: currentUser ? currentUser.username : 'Not logged in',
+        projectId: projectId,
+        hasCurrentTopics: !!currentProjectTopics,
+        topicsCount: currentProjectTopics ? currentProjectTopics.length : 0
+    });
+    
+    if (!currentUser || !projectId) {
+        console.error('📋 TOPIC: ❌ Missing required information');
         showNotification('Missing required information', 'error');
         return;
     }
 
     try {
-        const response = await fetch(`${API_BASE_URL}/projects/${window.currentEditingProjectId}/topics`, {
+        console.log('📋 TOPIC: 📤 Sending POST request to create topic');
+        
+        const response = await fetch(`${API_BASE_URL}/projects/${projectId}/topics`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -4211,7 +4388,15 @@ async function addEditTopic() {
         });
 
         const result = await response.json();
+        
+        console.log('📋 TOPIC: Server response:', {
+            success: result.success,
+            data: result.data,
+            message: result.message
+        });
+        
         if (result.success) {
+            console.log('📋 TOPIC: ✅ Topic created successfully, updating UI');
             currentProjectTopics.push(result.data);
             displayEditTopics();
             showNotification('Topic added successfully', 'success');
@@ -4226,9 +4411,16 @@ async function addEditTopic() {
 
 // Update topic title
 async function updateTopicTitle(topicId, newTitle) {
-    if (!newTitle.trim()) return;
+    console.log('📋 TOPIC: Updating topic title:', { topicId, newTitle });
+    
+    if (!newTitle.trim()) {
+        console.warn('📋 TOPIC: ❌ Empty title provided');
+        return;
+    }
 
     try {
+        console.log('📋 TOPIC: 📤 Sending PUT request to update topic');
+        
         const response = await fetch(`${API_BASE_URL}/topics/${topicId}`, {
             method: 'PUT',
             headers: {
@@ -4240,7 +4432,14 @@ async function updateTopicTitle(topicId, newTitle) {
         });
 
         const result = await response.json();
+        
+        console.log('📋 TOPIC: Update response:', {
+            success: result.success,
+            message: result.message
+        });
+        
         if (result.success) {
+            console.log('📋 TOPIC: ✅ Topic title updated successfully');
             // Update local state
             const topic = currentProjectTopics.find(t => t.TopicID === topicId);
             if (topic) {
@@ -4256,7 +4455,11 @@ async function updateTopicTitle(topicId, newTitle) {
 
 // Add POI to topic
 async function addPOIToTopic(topicId) {
+    console.log('📍 POI: Adding new POI to topic:', topicId);
+    
     try {
+        console.log('📍 POI: 📤 Sending POST request to create POI');
+        
         const response = await fetch(`${API_BASE_URL}/topics/${topicId}/pois`, {
             method: 'POST',
             headers: {
@@ -4269,20 +4472,33 @@ async function addPOIToTopic(topicId) {
         });
 
         const result = await response.json();
+        
+        console.log('📍 POI: Server response:', {
+            success: result.success,
+            data: result.data,
+            message: result.message
+        });
+        
         if (result.success) {
+            console.log('📍 POI: ✅ POI created successfully, updating UI');
+            
             // Find topic and add POI
             const topic = currentProjectTopics.find(t => t.TopicID === topicId);
             if (topic) {
                 if (!topic.pois) topic.pois = [];
                 topic.pois.push(result.data);
+                console.log('📍 POI: Updated topic with new POI, total POIs:', topic.pois.length);
                 displayEditTopics();
                 showNotification('POI added successfully', 'success');
+            } else {
+                console.error('📍 POI: ❌ Could not find topic with ID:', topicId);
             }
         } else {
+            console.error('📍 POI: ❌ Failed to create POI:', result.message);
             showNotification(result.message || 'Failed to add POI', 'error');
         }
     } catch (error) {
-        console.error('Error adding POI:', error);
+        console.error('📍 POI: ❌ Error adding POI:', error);
         showNotification('Failed to add POI', 'error');
     }
 }
@@ -4364,11 +4580,20 @@ async function uploadPOIImage(poiId) {
                 return;
             }
             
+            console.log('📍 POI IMAGE: Uploading image for POI:', poiId);
+            console.log('📍 POI IMAGE: File details:', {
+                name: file.name,
+                size: file.size,
+                type: file.type
+            });
+            
             // Upload the file first
             const formData = new FormData();
             formData.append('file', file);
             formData.append('userId', currentUser.id);
             formData.append('customName', `POI_${poiId}_${file.name}`);
+            
+            console.log('📍 POI IMAGE: 📤 Uploading file to media endpoint');
             
             const uploadResponse = await fetch(`${API_BASE_URL}/media/upload`, {
                 method: 'POST',
@@ -4377,7 +4602,15 @@ async function uploadPOIImage(poiId) {
             
             const uploadResult = await uploadResponse.json();
             
+            console.log('📍 POI IMAGE: Upload response:', {
+                success: uploadResult.success,
+                fileUrl: uploadResult.fileUrl,
+                message: uploadResult.message
+            });
+            
             if (uploadResult.success) {
+                console.log('📍 POI IMAGE: 📤 Updating POI with image URL');
+                
                 // Update POI with image path
                 const updateResponse = await fetch(`${API_BASE_URL}/pois/${poiId}`, {
                     method: 'PUT',
@@ -4385,13 +4618,23 @@ async function uploadPOIImage(poiId) {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        pImage: uploadResult.file.url
+                        pImage: uploadResult.fileUrl
                     })
+                });
+                
+                console.log('📍 POI IMAGE: Update request body:', {
+                    pImage: uploadResult.fileUrl
                 });
                 
                 const updateResult = await updateResponse.json();
                 
+                console.log('📍 POI IMAGE: POI update response:', {
+                    success: updateResult.success,
+                    message: updateResult.message
+                });
+                
                 if (updateResult.success) {
+                    console.log('📍 POI IMAGE: ✅ POI image uploaded and linked successfully');
                     showNotification('POI image uploaded successfully!', 'success');
                     // Refresh the topics display
                     loadEditTopics(window.currentEditingProjectId);
@@ -4489,11 +4732,20 @@ async function updatePOILocation(poiId, locationDescription) {
 
 // Add card to POI
 async function addCardToPOI(poiId) {
+    console.log('📄 CARD: Adding new card to POI:', poiId);
+    
     // Create a simple modal to select card type
     const typeSelection = await selectCardType();
-    if (typeSelection === null) return; // User cancelled
+    console.log('📄 CARD: Selected card type:', typeSelection);
+    
+    if (typeSelection === null) {
+        console.log('📄 CARD: User cancelled card creation');
+        return; // User cancelled
+    }
     
     try {
+        console.log('📄 CARD: 📤 Sending POST request to create card');
+        
         const response = await fetch(`${API_BASE_URL}/pois/${poiId}/cards`, {
             method: 'POST',
             headers: {
@@ -4507,13 +4759,23 @@ async function addCardToPOI(poiId) {
         });
 
         const result = await response.json();
+        
+        console.log('📄 CARD: Server response:', {
+            success: result.success,
+            data: result.data,
+            message: result.message
+        });
+        
         if (result.success) {
+            console.log('📄 CARD: ✅ Card created successfully, updating UI');
+            
             // Find POI and add card
             for (const topic of currentProjectTopics) {
                 const poi = topic.pois?.find(p => p.POIID === poiId);
                 if (poi) {
                     if (!poi.cards) poi.cards = [];
                     poi.cards.push(result.data);
+                    console.log('📄 CARD: Updated POI with new card, total cards:', poi.cards.length);
                     displayEditTopics();
                     showNotification('Card added successfully', 'success');
                     break;
@@ -4670,7 +4932,9 @@ async function showAttachMediaModal(cardId) {
         const response = await fetch(`${API_BASE_URL}/media/files?userId=${currentUser.id}`);
         const result = await response.json();
         
-        if (result.success && result.data && result.data.length > 0) {
+        console.log('📄 CARD MEDIA: API response:', result);
+        
+        if (result.success && result.files && result.files.length > 0) {
             // Create modal HTML
             const modalHtml = `
                 <div class="modal" id="attachMediaModal" style="display: block;">
@@ -4681,10 +4945,10 @@ async function showAttachMediaModal(cardId) {
                         </div>
                         <div class="modal-body">
                             <div class="media-grid">
-                                ${result.data.map(media => `
+                                ${result.files.map(media => `
                                     <div class="media-item-select" onclick="attachMediaToCard(${cardId}, ${media.id})">
-                                        <img src="${media.file_url || media.download_url}" alt="${media.displayName || media.original_name}">
-                                        <div class="media-name">${media.displayName || media.original_name}</div>
+                                        <img src="${media.url}" alt="${media.originalName}">
+                                        <div class="media-name">${media.originalName}</div>
                                     </div>
                                 `).join('')}
                             </div>
@@ -4714,7 +4978,11 @@ function closeAttachMediaModal() {
 
 // Attach media to card
 async function attachMediaToCard(cardId, mediaId) {
+    console.log('📄 CARD MEDIA: Attaching media to card:', { cardId, mediaId });
+    
     try {
+        console.log('📄 CARD MEDIA: 📤 Sending POST request to attach media');
+        
         const response = await fetch(`${API_BASE_URL}/cards/${cardId}/media`, {
             method: 'POST',
             headers: {
@@ -4724,20 +4992,29 @@ async function attachMediaToCard(cardId, mediaId) {
         });
 
         const result = await response.json();
+        
+        console.log('📄 CARD MEDIA: Server response:', {
+            success: result.success,
+            message: result.message
+        });
+        
         if (result.success) {
+            console.log('📄 CARD MEDIA: ✅ Media attached successfully');
             showNotification('Media attached successfully', 'success');
             closeAttachMediaModal();
             
             // Refresh the project display
             if (window.currentEditingProjectId) {
+                console.log('📄 CARD MEDIA: Refreshing project display');
                 await loadEditTopics(window.currentEditingProjectId);
                 displayEditTopics();
             }
         } else {
+            console.error('📄 CARD MEDIA: ❌ Failed to attach media:', result.message);
             showNotification(result.message || 'Failed to attach media', 'error');
         }
     } catch (error) {
-        console.error('Error attaching media:', error);
+        console.error('📄 CARD MEDIA: ❌ Error attaching media:', error);
         showNotification('Failed to attach media', 'error');
     }
 }
