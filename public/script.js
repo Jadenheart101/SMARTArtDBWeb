@@ -4219,7 +4219,23 @@ async function loadProjectTopics(projectId) {
         
         if (result.success) {
             currentProjectTopics = result.data || [];
-            console.log('📋 Set currentProjectTopics to', currentProjectTopics.length, 'topics');
+            
+            // Initialize expansion states (collapsed by default)
+            currentProjectTopics.forEach(topic => {
+                topic.is_expanded = false; // Topics start collapsed
+                if (topic.pois) {
+                    topic.pois.forEach(poi => {
+                        poi.is_expanded = false; // POIs start collapsed
+                        if (poi.cards) {
+                            poi.cards.forEach(card => {
+                                card.is_expanded = false; // Cards start collapsed
+                            });
+                        }
+                    });
+                }
+            });
+            
+            console.log('📋 Set currentProjectTopics to', currentProjectTopics.length, 'topics with expansion states initialized');
             displayProjectTopics();
         } else {
             console.error('❌ Failed to load project topics:', result.message);
@@ -4242,6 +4258,7 @@ function displayProjectTopics() {
     }
 
     console.log('📋 displayProjectTopics called with', currentProjectTopics.length, 'topics');
+    console.log('🔧 DEBUG: Full topics data structure:', JSON.stringify(currentProjectTopics, null, 2));
 
     if (currentProjectTopics.length === 0) {
         console.log('📋 No topics found - displaying placeholder');
@@ -4261,13 +4278,18 @@ function displayProjectTopics() {
     currentProjectTopics.forEach((topic, index) => {
         console.log(`  📝 Topic ${index + 1}: "${topic.Label}" (ID: ${topic.TopicID})`);
         console.log(`    📍 POIs: ${topic.pois ? topic.pois.length : 0}`);
+        console.log(`    🔧 DEBUG: Topic expansion state: ${topic.is_expanded}`);
+        
         if (topic.pois && topic.pois.length > 0) {
             topic.pois.forEach((poi, poiIndex) => {
                 console.log(`      POI ${poiIndex + 1}: ID ${poi.POIID}, Location: "${poi.pLocation || 'No location'}", Image: ${poi.pImage ? 'Yes' : 'No'}`);
+                console.log(`        🔧 DEBUG: POI expansion state: ${poi.is_expanded}`);
+                
                 if (poi.cards && poi.cards.length > 0) {
                     console.log(`        📄 Cards: ${poi.cards.length}`);
                     poi.cards.forEach((card, cardIndex) => {
                         console.log(`          Card ${cardIndex + 1}: "${card.Title}" (Body: ${card.Body ? 'Yes' : 'No'}, Notes: ${card.Notes ? 'Yes' : 'No'}, Refs: ${card.References ? 'Yes' : 'No'}, Media: ${card.media ? card.media.length : 0})`);
+                        console.log(`            🔧 DEBUG: Card expansion state: ${card.is_expanded}`);
                     });
                 } else {
                     console.log(`        📄 Cards: None`);
@@ -4301,64 +4323,150 @@ function displayProjectTopics() {
 
 // Display POIs for a topic
 function displayPOIs(pois) {
+    console.log('🔧 DEBUG: displayPOIs called with', pois ? pois.length : 0, 'POIs');
+    
     if (!pois || pois.length === 0) {
+        console.log('🔧 DEBUG: No POIs to display');
         return '<div class="no-pois-message"><em>No POIs created yet</em></div>';
     }
 
-    return pois.map(poi => `
+    console.log('🔧 DEBUG: Processing POIs for display:');
+    pois.forEach((poi, index) => {
+        console.log(`  POI ${index + 1}: ID ${poi.POIID}, expanded: ${poi.is_expanded}`);
+    });
+
+    const poisHtml = pois.map(poi => {
+        const poiHtml = `
         <div class="poi-item" data-poi-id="${poi.POIID}">
-            <div class="poi-header">
-                <h5>POI #${poi.POIID}</h5>
+            <div class="poi-header" onclick="togglePOI(${poi.POIID})">
+                <div class="poi-title">
+                    <i class="fas fa-chevron-${poi.is_expanded ? 'down' : 'right'} poi-toggle"></i>
+                    <h5>POI #${poi.POIID}</h5>
+                </div>
+            </div>
+            <div class="poi-content ${poi.is_expanded ? 'expanded' : 'collapsed'}">
                 ${poi.pImage ? `
-                    <div class="poi-image-display">
-                        <img src="${poi.pImage}" alt="POI Image" style="max-width: 150px; max-height: 150px; object-fit: cover; border-radius: 8px; border: 2px solid #e5e7eb;">
-                    </div>
-                ` : `
-                    <small class="poi-no-image" style="color: #9ca3af; font-style: italic;">No image</small>
-                `}
-                ${poi.pLocation ? `
-                    <div class="poi-location-description" style="margin-top: 8px; padding: 8px; background: #f8fafc; border-radius: 4px; border-left: 3px solid #3b82f6;">
-                        <strong style="color: #1e40af; font-size: 0.9em;">Location:</strong>
-                        <p style="margin: 4px 0 0 0; color: #374151; font-size: 0.9em;">${escapeHtml(poi.pLocation)}</p>
+                    <div class="poi-image-display" style="margin-bottom: 1rem;">
+                        <img src="${poi.pImage}" alt="POI Image" style="max-width: 200px; max-height: 200px; object-fit: cover; border-radius: 8px; border: 2px solid #e5e7eb;">
                     </div>
                 ` : ''}
-            </div>
-            <div class="poi-cards">
-                ${displayCards(poi.cards || [])}
+                ${poi.pLocation ? `
+                    <div class="poi-location-description" style="margin-bottom: 1rem; padding: 12px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                        <strong style="color: #1e40af; font-size: 1em; display: block; margin-bottom: 6px;">
+                            <i class="fas fa-map-marker-alt"></i> Location Description:
+                        </strong>
+                        <p style="margin: 0; color: #374151; line-height: 1.5;">${escapeHtml(poi.pLocation)}</p>
+                    </div>
+                ` : ''}
+                <div class="poi-cards">
+                    <div class="poi-cards-header" style="margin-bottom: 0.5rem;">
+                        <strong style="color: #374151;">
+                            <i class="fas fa-layer-group"></i> Cards (${poi.cards ? poi.cards.length : 0})
+                        </strong>
+                    </div>
+                    ${displayCards(poi.cards || [])}
+                </div>
             </div>
         </div>
-    `).join('');
+    `;
+        
+        console.log(`🔧 DEBUG: Generated HTML for POI ${poi.POIID}:`, poiHtml.substring(0, 200) + '...');
+        return poiHtml;
+    }).join('');
+    
+    console.log('🔧 DEBUG: Total POIs HTML length:', poisHtml.length);
+    return poisHtml;
 }
 
 // Display cards for a POI
 function displayCards(cards) {
+    console.log('🔧 DEBUG: displayCards called with', cards ? cards.length : 0, 'cards');
+    
     if (!cards || cards.length === 0) {
+        console.log('🔧 DEBUG: No cards to display');
         return '<div class="no-cards-message"><em>No cards created yet</em></div>';
     }
 
-    return cards.map(card => `
+    console.log('🔧 DEBUG: Processing cards for display:');
+    cards.forEach((card, index) => {
+        console.log(`  Card ${index + 1}: ID ${card.CardID}, Title: "${card.Title}", expanded: ${card.is_expanded}`);
+    });
+
+    const cardsHtml = cards.map(card => {
+        const cardHtml = `
         <div class="card-item" data-card-id="${card.CardID}">
-            <div class="card-header">
-                <h6>${escapeHtml(card.Title)}</h6>
-                <span class="card-type-badge">Type ${card.Type}</span>
-            </div>
-            <div class="card-body">
-                ${card.Body ? escapeHtml(card.Body).replace(/\n/g, '<br>') : '<em>No content</em>'}
-            </div>
-            ${card.media && card.media.length > 0 ? `
-                <div class="card-media">
-                    ${card.media.map(media => `
-                        <div class="card-media-item">
-                            <img src="${media.file_url || media.download_url}" alt="${media.displayName || media.original_name}" 
-                                 onclick="previewCardMedia('${media.file_url || media.download_url}', '${media.displayName || media.original_name}')">>
-                        </div>
-                    `).join('')}
+            <div class="card-header" onclick="toggleCard(${card.CardID})">
+                <div class="card-title">
+                    <i class="fas fa-chevron-${card.is_expanded ? 'down' : 'right'} card-toggle"></i>
+                    <h6>${escapeHtml(card.Title)}</h6>
+                    <span class="card-type-badge">Type ${card.Type}</span>
                 </div>
-            ` : ''}
-            ${card.Notes ? `<div class="card-notes"><strong>Notes:</strong> ${escapeHtml(card.Notes)}</div>` : ''}
-            ${card.References ? `<div class="card-references"><strong>References:</strong> ${escapeHtml(card.References)}</div>` : ''}
+            </div>
+            <div class="card-content ${card.is_expanded ? 'expanded' : 'collapsed'}">
+                <div class="card-body" style="margin-bottom: 1rem;">
+                    ${card.Body ? `
+                        <div style="padding: 12px; background: #f9fafb; border-radius: 6px; border-left: 4px solid #10b981;">
+                            <strong style="color: #065f46; display: block; margin-bottom: 6px;">
+                                <i class="fas fa-file-text"></i> Content:
+                            </strong>
+                            <div style="color: #374151; line-height: 1.5;">
+                                ${escapeHtml(card.Body).replace(/\n/g, '<br>')}
+                            </div>
+                        </div>
+                    ` : '<div style="color: #9ca3af; font-style: italic; padding: 8px;">No content</div>'}
+                </div>
+                
+                ${card.media && card.media.length > 0 ? `
+                    <div class="card-media" style="margin-bottom: 1rem;">
+                        <strong style="color: #374151; display: block; margin-bottom: 8px;">
+                            <i class="fas fa-images"></i> Media (${card.media.length}):
+                        </strong>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px;">
+                            ${card.media.map(media => `
+                                <div class="card-media-item" style="border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden;">
+                                    <img src="${media.file_url || media.download_url}" alt="${media.displayName || media.original_name}" 
+                                         style="width: 100%; height: 80px; object-fit: cover; cursor: pointer;"
+                                         onclick="previewCardMedia('${media.file_url || media.download_url}', '${media.displayName || media.original_name}')">
+                                    <div style="padding: 4px; font-size: 0.75em; color: #6b7280; text-align: center;">
+                                        ${(media.displayName || media.original_name).substring(0, 15)}${(media.displayName || media.original_name).length > 15 ? '...' : ''}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                ${card.Notes ? `
+                    <div class="card-notes" style="margin-bottom: 1rem; padding: 10px; background: #fef3c7; border-radius: 6px; border-left: 4px solid #f59e0b;">
+                        <strong style="color: #92400e; display: block; margin-bottom: 4px;">
+                            <i class="fas fa-sticky-note"></i> Notes:
+                        </strong>
+                        <div style="color: #78350f; line-height: 1.4;">
+                            ${escapeHtml(card.Notes)}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                ${card.References ? `
+                    <div class="card-references" style="padding: 10px; background: #ede9fe; border-radius: 6px; border-left: 4px solid #8b5cf6;">
+                        <strong style="color: #5b21b6; display: block; margin-bottom: 4px;">
+                            <i class="fas fa-link"></i> References:
+                        </strong>
+                        <div style="color: #6d28d9; line-height: 1.4;">
+                            ${escapeHtml(card.References)}
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
         </div>
-    `).join('');
+    `;
+        
+        console.log(`🔧 DEBUG: Generated HTML for Card ${card.CardID}:`, cardHtml.substring(0, 200) + '...');
+        return cardHtml;
+    }).join('');
+    
+    console.log('🔧 DEBUG: Total cards HTML length:', cardsHtml.length);
+    return cardsHtml;
 }
 
 // Toggle topic expansion
@@ -4382,6 +4490,191 @@ async function toggleTopic(topicId) {
         if (content) {
             content.className = `topic-content ${topic.is_expanded ? 'expanded' : 'collapsed'}`;
         }
+    }
+}
+
+// Toggle POI expansion
+async function togglePOI(poiId) {
+    console.log('🔧 DEBUG: togglePOI called with poiId:', poiId);
+    
+    // Find the POI in the current project topics
+    let targetPOI = null;
+    let topicIndex = -1;
+    let poiIndex = -1;
+    
+    for (let i = 0; i < currentProjectTopics.length; i++) {
+        const topic = currentProjectTopics[i];
+        if (topic.pois) {
+            for (let j = 0; j < topic.pois.length; j++) {
+                if (topic.pois[j].POIID === poiId) {
+                    targetPOI = topic.pois[j];
+                    topicIndex = i;
+                    poiIndex = j;
+                    break;
+                }
+            }
+            if (targetPOI) break;
+        }
+    }
+    
+    console.log('🔧 DEBUG: POI search result:', {
+        found: !!targetPOI,
+        topicIndex,
+        poiIndex,
+        currentExpansionState: targetPOI ? targetPOI.is_expanded : 'N/A'
+    });
+    
+    if (!targetPOI) {
+        console.error('🔧 DEBUG: POI not found in currentProjectTopics');
+        console.log('🔧 DEBUG: Available POIs:');
+        currentProjectTopics.forEach((topic, tIndex) => {
+            if (topic.pois) {
+                topic.pois.forEach((poi, pIndex) => {
+                    console.log(`  Topic ${tIndex}, POI ${pIndex}: ID ${poi.POIID}`);
+                });
+            }
+        });
+        return;
+    }
+
+    // Toggle the expansion state
+    const oldState = targetPOI.is_expanded;
+    targetPOI.is_expanded = !targetPOI.is_expanded;
+    
+    console.log('🔧 DEBUG: POI expansion state changed:', oldState, '→', targetPOI.is_expanded);
+    
+    // Update UI
+    const poiElement = document.querySelector(`[data-poi-id="${poiId}"]`);
+    console.log('🔧 DEBUG: POI element found:', !!poiElement);
+    
+    if (poiElement) {
+        const toggle = poiElement.querySelector('.poi-toggle');
+        const content = poiElement.querySelector('.poi-content');
+        
+        console.log('🔧 DEBUG: UI elements found:', {
+            toggle: !!toggle,
+            content: !!content
+        });
+        
+        if (toggle) {
+            const newToggleClass = `fas fa-chevron-${targetPOI.is_expanded ? 'down' : 'right'} poi-toggle`;
+            toggle.className = newToggleClass;
+            console.log('🔧 DEBUG: Toggle icon updated to:', newToggleClass);
+        }
+        
+        if (content) {
+            const newContentClass = `poi-content ${targetPOI.is_expanded ? 'expanded' : 'collapsed'}`;
+            content.className = newContentClass;
+            console.log('🔧 DEBUG: Content class updated to:', newContentClass);
+            console.log('🔧 DEBUG: Content element current display style:', window.getComputedStyle(content).display);
+            console.log('🔧 DEBUG: Content element classList:', content.classList.toString());
+        }
+    } else {
+        console.error('🔧 DEBUG: POI element not found in DOM with selector:', `[data-poi-id="${poiId}"]`);
+        console.log('🔧 DEBUG: Available POI elements in DOM:');
+        const allPoiElements = document.querySelectorAll('[data-poi-id]');
+        allPoiElements.forEach(el => {
+            console.log('  Found POI element with ID:', el.getAttribute('data-poi-id'));
+        });
+    }
+}
+
+// Toggle Card expansion
+async function toggleCard(cardId) {
+    console.log('🔧 DEBUG: toggleCard called with cardId:', cardId);
+    
+    // Find the card in the current project topics
+    let targetCard = null;
+    let topicIndex = -1;
+    let poiIndex = -1;
+    let cardIndex = -1;
+    
+    for (let i = 0; i < currentProjectTopics.length; i++) {
+        const topic = currentProjectTopics[i];
+        if (topic.pois) {
+            for (let j = 0; j < topic.pois.length; j++) {
+                const poi = topic.pois[j];
+                if (poi.cards) {
+                    for (let k = 0; k < poi.cards.length; k++) {
+                        if (poi.cards[k].CardID === cardId) {
+                            targetCard = poi.cards[k];
+                            topicIndex = i;
+                            poiIndex = j;
+                            cardIndex = k;
+                            break;
+                        }
+                    }
+                    if (targetCard) break;
+                }
+            }
+            if (targetCard) break;
+        }
+    }
+    
+    console.log('🔧 DEBUG: Card search result:', {
+        found: !!targetCard,
+        topicIndex,
+        poiIndex,
+        cardIndex,
+        currentExpansionState: targetCard ? targetCard.is_expanded : 'N/A'
+    });
+    
+    if (!targetCard) {
+        console.error('🔧 DEBUG: Card not found in currentProjectTopics');
+        console.log('🔧 DEBUG: Available cards:');
+        currentProjectTopics.forEach((topic, tIndex) => {
+            if (topic.pois) {
+                topic.pois.forEach((poi, pIndex) => {
+                    if (poi.cards) {
+                        poi.cards.forEach((card, cIndex) => {
+                            console.log(`  Topic ${tIndex}, POI ${pIndex}, Card ${cIndex}: ID ${card.CardID}`);
+                        });
+                    }
+                });
+            }
+        });
+        return;
+    }
+
+    // Toggle the expansion state
+    const oldState = targetCard.is_expanded;
+    targetCard.is_expanded = !targetCard.is_expanded;
+    
+    console.log('🔧 DEBUG: Card expansion state changed:', oldState, '→', targetCard.is_expanded);
+    
+    // Update UI
+    const cardElement = document.querySelector(`[data-card-id="${cardId}"]`);
+    console.log('🔧 DEBUG: Card element found:', !!cardElement);
+    
+    if (cardElement) {
+        const toggle = cardElement.querySelector('.card-toggle');
+        const content = cardElement.querySelector('.card-content');
+        
+        console.log('🔧 DEBUG: UI elements found:', {
+            toggle: !!toggle,
+            content: !!content
+        });
+        
+        if (toggle) {
+            const newToggleClass = `fas fa-chevron-${targetCard.is_expanded ? 'down' : 'right'} card-toggle`;
+            toggle.className = newToggleClass;
+            console.log('🔧 DEBUG: Toggle icon updated to:', newToggleClass);
+        }
+        
+        if (content) {
+            const newContentClass = `card-content ${targetCard.is_expanded ? 'expanded' : 'collapsed'}`;
+            content.className = newContentClass;
+            console.log('🔧 DEBUG: Content class updated to:', newContentClass);
+            console.log('🔧 DEBUG: Content element current display style:', window.getComputedStyle(content).display);
+            console.log('🔧 DEBUG: Content element classList:', content.classList.toString());
+        }
+    } else {
+        console.error('🔧 DEBUG: Card element not found in DOM with selector:', `[data-card-id="${cardId}"]`);
+        console.log('🔧 DEBUG: Available card elements in DOM:');
+        const allCardElements = document.querySelectorAll('[data-card-id]');
+        allCardElements.forEach(el => {
+            console.log('  Found card element with ID:', el.getAttribute('data-card-id'));
+        });
     }
 }
 

@@ -1,3 +1,31 @@
+/* ========== Enhanced Dropdown Content Visibility Rules ========== */
+/* Force hide all dropdown content by default - highest specificity */
+.poi-item .poi-content,
+.card-item .card-content,
+.topic-item .topic-content {
+    display: none !important;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+/* Collapsed state - ensure content is hidden */
+.poi-item .poi-content.collapsed,
+.card-item .card-content.collapsed,
+.topic-item .topic-content.collapsed {
+    display: none !important;
+}
+
+/* Expanded state - show content with proper styling */
+.poi-item .poi-content.expanded,
+.card-item .card-content.expanded,
+.topic-item .topic-content.expanded {
+    display: block !important;
+    padding: 1rem !important;
+    margin-top: 0.5rem !important;
+    background: #f8fafc;
+    border-top: 1px solid #e5e7eb;
+}
+
 /* ========== Project Topics Styles (using existing database structure) ========== */
 
 /* View Project Topics */
@@ -96,18 +124,20 @@
 .topic-content {
     border-top: 1px solid #e5e7eb;
     background: #f8fafc;
-    transition: max-height 0.3s ease, padding 0.3s ease;
+    transition: all 0.3s ease;
     overflow: hidden;
+    /* Default hidden - overridden by specific expanded/collapsed classes above */
+    display: none;
 }
 
 .topic-content.collapsed {
-    max-height: 0;
-    padding: 0 1rem;
+    display: none !important;
 }
 
 .topic-content.expanded {
+    display: block !important;
+    padding: 1rem !important;
     max-height: 600px;
-    padding: 1rem;
     overflow-y: auto;
     overflow-x: hidden;
 }

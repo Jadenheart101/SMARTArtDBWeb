@@ -1110,6 +1110,128 @@ html {
     object-fit: contain;
 }
 
+/* Project View Dropdown Styles */
+.topic-header, .poi-header, .card-header {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    border-radius: 6px;
+    padding: 8px 12px;
+}
+
+.topic-header:hover, .poi-header:hover, .card-header:hover {
+    background-color: #f9fafb;
+}
+
+.topic-title, .poi-title, .card-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.topic-toggle, .poi-toggle, .card-toggle {
+    transition: transform 0.2s ease;
+    color: #6b7280;
+}
+
+/* Dropdown content visibility rules - high specificity */
+.poi-item .poi-content,
+.card-item .card-content,
+.topic-item .topic-content {
+    overflow: hidden;
+    transition: all 0.3s ease;
+    /* Default to hidden state */
+    display: none !important;
+}
+
+/* Force hide all dropdown content by default */
+div.poi-content,
+div.card-content,
+div.topic-content {
+    display: none !important;
+}
+
+.poi-item .poi-content.collapsed,
+.card-item .card-content.collapsed,
+.topic-item .topic-content.collapsed {
+    display: none !important;
+}
+
+.poi-item .poi-content.expanded,
+.card-item .card-content.expanded,
+.topic-item .topic-content.expanded {
+    display: block !important;
+    padding: 1rem !important;
+    margin-top: 0.5rem !important;
+}
+
+.poi-summary, .card-summary {
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin-left: auto;
+}
+
+.poi-image-thumb {
+    margin-left: auto;
+}
+
+.topic-item, .poi-item, .card-item {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+    background: white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.poi-item {
+    margin-left: 1rem;
+    border-left: 3px solid #3b82f6;
+}
+
+.card-item {
+    margin-left: 1rem;
+    border-left: 3px solid #10b981;
+    margin-bottom: 0.5rem;
+}
+
+/* Enhanced Topic Headers */
+.topic-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-weight: 600;
+}
+
+.topic-header:hover {
+    background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+}
+
+.poi-header {
+    background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+    color: white;
+    font-weight: 500;
+}
+
+.poi-header:hover {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+}
+
+.card-header {
+    background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+    color: white;
+    font-weight: 500;
+}
+
+.card-header:hover {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.card-type-badge {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    margin-left: auto;
+}
+
 /* Responsive Modal */
 @media (max-width: 768px) {
     .modal-content {
@@ -1130,5 +1252,13 @@ html {
     
     .media-item-select img {
         height: 80px;
+    }
+    
+    .poi-item, .card-item {
+        margin-left: 0.5rem;
+    }
+    
+    .topic-content.expanded, .poi-content.expanded, .card-content.expanded {
+        padding: 0.75rem;
     }
 }
