@@ -1,6 +1,12 @@
 ﻿// API Configuration
 const API_BASE_URL = 'http://localhost:8080/api';
 
+// Helper function to get current user ID
+function getCurrentUserId() {
+    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    return currentUser ? currentUser.id : null;
+}
+
 // Global DOM elements (will be populated after components load)
 let galleryGrid, galleryLoading;
 
@@ -2681,6 +2687,20 @@ async function handleReplaceMedia() {
             console.log('📊 REPLACE HANDLER: Replacement data:', result.data);
             showNotification('Media replaced successfully! All references have been updated.', 'success');
             
+            // Refresh project gallery since media replacement may affect project approval status
+            console.log('🏛️ REPLACE HANDLER: Refreshing project gallery due to potential approval status changes');
+            const galleryGrid = document.getElementById('galleryGrid');
+            if (galleryGrid) {
+                loadGallery();
+            }
+            
+            // Refresh user dashboard since media replacement may affect project approval status
+            console.log('📊 REPLACE HANDLER: Refreshing user dashboard due to potential approval status changes');
+            const userProjectsGrid = document.getElementById('user-projects-grid');
+            if (userProjectsGrid) {
+                loadDashboardData();
+            }
+            
             // AGGRESSIVE cache busting - force reload ALL images
             console.log('🔄 REPLACE HANDLER: Starting aggressive cache busting');
             const timestamp = Date.now();
@@ -3156,7 +3176,8 @@ async function handleEditProject(event) {
     const projectData = {
         ProjectName: formData.get('editProjectName'),
         Description: formData.get('editProjectDescription'),
-        DateModified: new Date().toISOString().split('T')[0]
+        DateModified: new Date().toISOString().split('T')[0],
+        user_id: currentUser.id // Add user ID for approval reset checking
     };
     
     console.log('📝 Form data extracted:', {
@@ -3189,6 +3210,12 @@ async function handleEditProject(event) {
             showNotification('Project updated successfully!', 'success');
             closeEditProjectModal();
             loadDashboardData(); // Refresh dashboard
+            
+            // Refresh the main gallery if gallery elements exist
+            const galleryGrid = document.getElementById('galleryGrid');
+            if (galleryGrid) {
+                loadGallery();
+            }
         } else {
             showNotification(result.message || 'Failed to update project', 'error');
         }
@@ -4289,7 +4316,8 @@ async function submitArtInfo() {
             ArtMedia: formData.get('artMedia'),
             Submitor: formData.get('submitor') || currentUser.UserName,
             Date: formData.get('artDate') || new Date().toISOString().split('T')[0],
-            artcol: currentArtInfoImage.id // Link to the media file
+            artcol: currentArtInfoImage.id, // Link to the media file
+            user_id: currentUser.id // Add user ID for approval reset checking
         };
 
         console.log('🎨 ART INFO: Form data prepared:', {
@@ -4351,6 +4379,20 @@ async function submitArtInfo() {
             console.log(`✅ Art information ${action} successfully!`);
             showNotification(`Art information ${action} successfully!`, 'success');
             closeAddArtInfoModal();
+            
+            // Refresh project gallery since art info changes may affect project approval status
+            console.log('🏛️ ART INFO: Refreshing project gallery due to potential approval status changes');
+            const galleryGrid = document.getElementById('galleryGrid');
+            if (galleryGrid) {
+                loadGallery();
+            }
+            
+            // Refresh user dashboard since art info changes may affect project approval status
+            console.log('📊 ART INFO: Refreshing user dashboard due to potential approval status changes');
+            const userProjectsGrid = document.getElementById('user-projects-grid');
+            if (userProjectsGrid) {
+                loadDashboardData();
+            }
             
             // Refresh art info display in edit project modal if it's open
             const editModal = document.getElementById('editProjectModal');
@@ -5174,14 +5216,21 @@ async function updateTopicTitle(topicId, newTitle) {
     try {
         console.log('📋 TOPIC: 📤 Sending PUT request to update topic');
         
+        // Add current user ID for approval reset checking
+        const userId = getCurrentUserId();
+        const updateData = {
+            Label: newTitle.trim()
+        };
+        if (userId) {
+            updateData.user_id = userId;
+        }
+        
         const response = await fetch(`${API_BASE_URL}/topics/${topicId}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                Label: newTitle.trim()
-            })
+            body: JSON.stringify(updateData)
         });
 
         const result = await response.json();
@@ -5197,6 +5246,17 @@ async function updateTopicTitle(topicId, newTitle) {
             const topic = currentProjectTopics.find(t => t.TopicID === topicId);
             if (topic) {
                 topic.Label = newTitle.trim();
+            }
+            
+            // Refresh user dashboard and project gallery since topic changes may affect approval status
+            console.log('📊 TOPIC: Refreshing dashboard and gallery due to potential approval status changes');
+            const userProjectsGrid = document.getElementById('user-projects-grid');
+            if (userProjectsGrid) {
+                loadDashboardData();
+            }
+            const galleryGrid = document.getElementById('galleryGrid');
+            if (galleryGrid) {
+                loadGallery();
             }
         } else {
             showNotification('Failed to update topic title', 'error');
@@ -5282,7 +5342,13 @@ async function updatePOICoords(poiId, xCoord, yCoord) {
         } else {
             updateData.YCoord = currentY;
         }
-        
+
+        // Add current user ID for approval reset checking
+        const userId = getCurrentUserId();
+        if (userId) {
+            updateData.user_id = userId;
+        }
+
         const response = await fetch(`${API_BASE_URL}/pois/${poiId}`, {
             method: 'PUT',
             headers: {
@@ -5303,6 +5369,17 @@ async function updatePOICoords(poiId, xCoord, yCoord) {
                 }
             }
             console.log(`POI coordinates updated: (${updateData.XCoord}, ${updateData.YCoord})`);
+            
+            // Refresh user dashboard and project gallery since POI changes may affect approval status
+            console.log('📊 POI: Refreshing dashboard and gallery due to potential approval status changes');
+            const userProjectsGrid = document.getElementById('user-projects-grid');
+            if (userProjectsGrid) {
+                loadDashboardData();
+            }
+            const galleryGrid = document.getElementById('galleryGrid');
+            if (galleryGrid) {
+                loadGallery();
+            }
         } else {
             showNotification(result.message || 'Failed to update POI coordinates', 'error');
         }
@@ -5450,14 +5527,21 @@ async function removePOIImage(poiId) {
 // Update POI location description
 async function updatePOILocation(poiId, locationDescription) {
     try {
+        // Add current user ID for approval reset checking
+        const userId = getCurrentUserId();
+        const updateData = {
+            pLocation: locationDescription
+        };
+        if (userId) {
+            updateData.user_id = userId;
+        }
+
         const response = await fetch(`${API_BASE_URL}/pois/${poiId}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                pLocation: locationDescription
-            })
+            body: JSON.stringify(updateData)
         });
         
         const result = await response.json();
@@ -5473,6 +5557,17 @@ async function updatePOILocation(poiId, locationDescription) {
                 if (poi) {
                     poi.pLocation = locationDescription;
                 }
+            }
+            
+            // Refresh user dashboard and project gallery since POI changes may affect approval status
+            console.log('📊 POI LOCATION: Refreshing dashboard and gallery due to potential approval status changes');
+            const userProjectsGrid = document.getElementById('user-projects-grid');
+            if (userProjectsGrid) {
+                loadDashboardData();
+            }
+            const galleryGrid = document.getElementById('galleryGrid');
+            if (galleryGrid) {
+                loadGallery();
             }
         } else {
             showNotification('Failed to update POI location', 'error');
@@ -5567,6 +5662,12 @@ async function updateCardReferences(cardId, newReferences) {
 
 async function updateCard(cardId, updates) {
     try {
+        // Add current user ID for approval reset checking
+        const userId = getCurrentUserId();
+        if (userId) {
+            updates.user_id = userId;
+        }
+
         const response = await fetch(`${API_BASE_URL}/cards/${cardId}`, {
             method: 'PUT',
             headers: {
@@ -5583,6 +5684,17 @@ async function updateCard(cardId, updates) {
                     const card = poi.cards?.find(c => c.CardID === cardId);
                     if (card) {
                         Object.assign(card, updates);
+                        
+                        // Refresh user dashboard and project gallery since card changes may affect approval status
+                        console.log('📊 CARD: Refreshing dashboard and gallery due to potential approval status changes');
+                        const userProjectsGrid = document.getElementById('user-projects-grid');
+                        if (userProjectsGrid) {
+                            loadDashboardData();
+                        }
+                        const galleryGrid = document.getElementById('galleryGrid');
+                        if (galleryGrid) {
+                            loadGallery();
+                        }
                         return;
                     }
                 }

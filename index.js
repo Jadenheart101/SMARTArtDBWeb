@@ -134,6 +134,70 @@ async function performAutomaticStorageCleanup() {
   }
 }
 
+// ========== Project Approval Management Helper Function ==========
+/**
+ * Helper function to reset project approval status when regular users make changes to approved projects
+ * Admin users are exempt from this restriction and can modify approved projects without status change
+ * @param {number} projectId - The ID of the project being modified
+ * @param {number} userId - The ID of the user making the modification
+ * @param {string} changeType - Description of what type of change was made (for logging)
+ * @returns {Promise<boolean>} - Returns true if project status was reset, false if no change needed
+ */
+async function resetProjectApprovalIfNeeded(projectId, userId, changeType = 'unknown change') {
+  try {
+    console.log(`🔄 APPROVAL CHECK: Checking if project ${projectId} needs approval reset for user ${userId} (${changeType})`);
+    
+    // Check if user is admin
+    const userResult = await executeQuery('SELECT isAdmin FROM user WHERE UserID = ?', [userId]);
+    if (userResult.length === 0) {
+      console.log(`❌ APPROVAL CHECK: User ${userId} not found`);
+      return false;
+    }
+    
+    const isAdmin = userResult[0].isAdmin === 1;
+    console.log(`👤 APPROVAL CHECK: User ${userId} is${isAdmin ? '' : ' not'} an admin`);
+    
+    if (isAdmin) {
+      console.log(`✅ APPROVAL CHECK: Admin user - no approval reset needed`);
+      return false;
+    }
+    
+    // Check if project is currently approved
+    const projectResult = await executeQuery('SELECT Approved, NeedsReview, ProjectName FROM project WHERE ProjectID = ?', [projectId]);
+    if (projectResult.length === 0) {
+      console.log(`❌ APPROVAL CHECK: Project ${projectId} not found`);
+      return false;
+    }
+    
+    const project = projectResult[0];
+    const isApproved = project.Approved === 1;
+    console.log(`📊 APPROVAL CHECK: Project "${project.ProjectName}" is${isApproved ? '' : ' not'} currently approved`);
+    
+    if (!isApproved) {
+      console.log(`ℹ️ APPROVAL CHECK: Project not approved - no reset needed`);
+      return false;
+    }
+    
+    // Reset approval status
+    const resetResult = await executeQuery(
+      'UPDATE project SET Approved = 0, NeedsReview = 1, DateModified = ? WHERE ProjectID = ?',
+      [new Date().toISOString().split('T')[0], projectId]
+    );
+    
+    if (resetResult.affectedRows > 0) {
+      console.log(`🔄 APPROVAL RESET: Project "${project.ProjectName}" approval status reset due to ${changeType} by regular user ${userId}`);
+      return true;
+    } else {
+      console.log(`❌ APPROVAL RESET: Failed to reset approval status for project ${projectId}`);
+      return false;
+    }
+    
+  } catch (error) {
+    console.error(`❌ APPROVAL CHECK ERROR: Failed to check/reset approval for project ${projectId}:`, error);
+    return false;
+  }
+}
+
 const app = express();
 const PORT = process.env.PORT || 8080;
 
@@ -515,7 +579,7 @@ app.post('/api/art', async (req, res) => {
 });
 
 app.put('/api/art/:id', async (req, res) => {
-  const { ArtistName, Submitor, Date: artDate, ArtMedia, ArtName, artcol } = req.body;
+  const { ArtistName, Submitor, Date: artDate, ArtMedia, ArtName, artcol, user_id } = req.body;
   
   try {
     const result = await executeQuery(
@@ -525,6 +589,27 @@ app.put('/api/art/:id', async (req, res) => {
     
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: 'Artwork not found' });
+    }
+    
+    // Check if project approval status needs to be reset
+    if (user_id && artcol) {
+      try {
+        // Find projects that use the media file associated with this art
+        const projectsResult = await executeQuery(`
+          SELECT p.ProjectID 
+          FROM project p 
+          JOIN media_files m ON p.image_id = m.id 
+          WHERE m.id = ?
+        `, [artcol]);
+        
+        // Reset approval for all projects using this media
+        for (const project of projectsResult) {
+          await resetProjectApprovalIfNeeded(project.ProjectID, user_id, 'art info update');
+        }
+      } catch (approvalError) {
+        console.error('Error checking approval reset for art update:', approvalError);
+        // Don't fail the update if approval reset fails
+      }
     }
     
     const updatedArtwork = await executeQuery('SELECT * FROM art WHERE ArtId = ?', [req.params.id]);
@@ -669,18 +754,23 @@ app.post('/api/projects', async (req, res) => {
 app.put('/api/projects/:id', async (req, res) => {
   try {
     const projectId = req.params.id;
-    const { ProjectName, Description, ImageID } = req.body;
+    const { ProjectName, Description, ImageID, user_id } = req.body;
     
     console.log('📝 PUT /api/projects/:id received:', {
       projectId,
       ProjectName,
       Description,
       ImageID,
+      user_id,
       bodyKeys: Object.keys(req.body)
     });
     
     if (!ProjectName) {
       return res.status(400).json({ success: false, message: 'Project name is required' });
+    }
+    
+    if (!user_id) {
+      return res.status(400).json({ success: false, message: 'User ID is required' });
     }
     
     const updateFields = ['ProjectName = ?'];
@@ -739,7 +829,15 @@ app.put('/api/projects/:id', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Project not found' });
     }
     
-    res.json({ success: true, message: 'Project updated successfully' });
+    // Check if project approval status needs to be reset
+    const approvalReset = await resetProjectApprovalIfNeeded(projectId, user_id, 'project update');
+    
+    let message = 'Project updated successfully';
+    if (approvalReset) {
+      message += '. Project approval has been reset and is now pending review.';
+    }
+    
+    res.json({ success: true, message, approvalReset });
   } catch (error) {
     console.error('Error updating project:', error);
     res.status(500).json({ success: false, message: 'Error updating project', error: error.message });
@@ -1482,7 +1580,7 @@ app.post('/api/projects/:id/topics', async (req, res) => {
 app.put('/api/topics/:id', async (req, res) => {
   try {
     const topicId = req.params.id;
-    const { Label, topic_title, topic_content, is_expanded } = req.body;
+    const { Label, topic_title, topic_content, is_expanded, user_id } = req.body;
     
     const updateFields = [];
     const updateValues = [];
@@ -1515,6 +1613,20 @@ app.put('/api/topics/:id', async (req, res) => {
     
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: 'Topic not found' });
+    }
+
+    // Check if project approval status needs to be reset
+    if (user_id) {
+      try {
+        // Get the project ID for this topic
+        const topicResult = await executeQuery('SELECT project_id FROM project_topics WHERE id = ?', [topicId]);
+        if (topicResult.length > 0) {
+          await resetProjectApprovalIfNeeded(topicResult[0].project_id, user_id, 'topic update');
+        }
+      } catch (approvalError) {
+        console.error('Error checking approval reset for topic update:', approvalError);
+        // Don't fail the update if approval reset fails
+      }
     }
     
     const updatedTopic = await executeQuery('SELECT *, id as TopicID, project_id as ProjectID_FK, topic_title as Label FROM project_topics WHERE id = ?', [topicId]);
@@ -1590,7 +1702,7 @@ app.post('/api/topics/:id/pois', async (req, res) => {
 app.put('/api/pois/:id', async (req, res) => {
   try {
     const poiId = req.params.id;
-    const { XCoord, YCoord, pImage, pLocation, poi_title, poi_content } = req.body;
+    const { XCoord, YCoord, pImage, pLocation, poi_title, poi_content, user_id } = req.body;
     
     console.log('📍 PUT /api/pois/:id received:', {
       poiId,
@@ -1600,6 +1712,7 @@ app.put('/api/pois/:id', async (req, res) => {
       pLocation,
       poi_title,
       poi_content,
+      user_id,
       bodyKeys: Object.keys(req.body)
     });
     
@@ -1653,6 +1766,26 @@ app.put('/api/pois/:id', async (req, res) => {
     
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: 'POI not found' });
+    }
+    
+    // Get project ID for approval reset check
+    if (user_id) {
+      try {
+        const projectResult = await executeQuery(`
+          SELECT pt.project_id 
+          FROM poi p 
+          JOIN project_topics pt ON p.topic_id = pt.id 
+          WHERE p.id = ?
+        `, [poiId]);
+        
+        if (projectResult.length > 0) {
+          const projectId = projectResult[0].project_id;
+          await resetProjectApprovalIfNeeded(projectId, user_id, 'POI update');
+        }
+      } catch (approvalError) {
+        console.error('Error checking approval reset for POI update:', approvalError);
+        // Don't fail the update if approval reset fails
+      }
     }
     
     const updatedPOI = await executeQuery('SELECT *, id as POIID, topic_id as TopicID_FK, x_coordinate as XCoord, y_coordinate as YCoord FROM poi WHERE id = ?', [poiId]);
@@ -1723,7 +1856,7 @@ app.post('/api/pois/:id/cards', async (req, res) => {
 app.put('/api/cards/:id', async (req, res) => {
   try {
     const cardId = req.params.id;
-    const { Title, Body, Type, Notes, References, card_title, card_content, card_order } = req.body;
+    const { Title, Body, Type, Notes, References, card_title, card_content, card_order, user_id } = req.body;
     
     console.log('📄 PUT /api/cards/:id received:', {
       cardId,
@@ -1735,6 +1868,7 @@ app.put('/api/cards/:id', async (req, res) => {
       card_title,
       card_content,
       card_order,
+      user_id,
       bodyKeys: Object.keys(req.body)
     });
     
@@ -1790,6 +1924,27 @@ app.put('/api/cards/:id', async (req, res) => {
     
     if (result.affectedRows === 0) {
       return res.status(404).json({ success: false, message: 'Card not found' });
+    }
+    
+    // Get project ID for approval reset check
+    if (user_id) {
+      try {
+        const projectResult = await executeQuery(`
+          SELECT pt.project_id 
+          FROM card c 
+          JOIN poi p ON c.poi_id = p.id 
+          JOIN project_topics pt ON p.topic_id = pt.id 
+          WHERE c.id = ?
+        `, [cardId]);
+        
+        if (projectResult.length > 0) {
+          const projectId = projectResult[0].project_id;
+          await resetProjectApprovalIfNeeded(projectId, user_id, 'card update');
+        }
+      } catch (approvalError) {
+        console.error('Error checking approval reset for card update:', approvalError);
+        // Don't fail the update if approval reset fails
+      }
     }
     
     const updatedCard = await executeQuery('SELECT *, id as CardID, poi_id as POIID_FK, card_title as Title, card_content as Body FROM card WHERE id = ?', [cardId]);
@@ -3305,6 +3460,36 @@ app.post('/api/media/:mediaId/replace', upload.single('file'), async (req, res) 
             ]);
 
             console.log(`User media record updated: ${originalMedia.file_path} -> ${newFilePath}`);
+
+            // Check if project approval status needs to be reset for media replacement
+            try {
+                // Find all projects that use this media file - including card media relationships
+                const projectsResult = await executeQuery(`
+                    SELECT DISTINCT ProjectID 
+                    FROM project 
+                    WHERE image_id = ?
+                    UNION
+                    SELECT DISTINCT p.ProjectID 
+                    FROM project p
+                    JOIN project_topics pt ON p.ProjectID = pt.project_id
+                    JOIN poi ON pt.id = poi.topic_id
+                    JOIN card c ON poi.id = c.poi_id
+                    JOIN card_media cm ON c.id = cm.Card_ID_FK
+                    WHERE cm.Media_ID_FK = ?
+                `, [mediaId, mediaId]);
+                
+                // Reset approval for all projects using this media
+                for (const project of projectsResult) {
+                    await resetProjectApprovalIfNeeded(project.ProjectID, userId, 'media file replacement');
+                }
+                
+                if (projectsResult.length > 0) {
+                    console.log(`Reset approval for ${projectsResult.length} projects due to media replacement`);
+                }
+            } catch (approvalError) {
+                console.error('Error checking approval reset for media replacement:', approvalError);
+                // Don't fail the replacement if approval reset fails
+            }
 
             // Note: project table uses image_id foreign key, so no updates needed there
             // The foreign key relationship will automatically point to the updated media record
