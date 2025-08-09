@@ -292,7 +292,8 @@ app.get('/api', (req, res) => {
       'GET /api/admin/users': 'Get all users with stats for user management (Admin only)',
       'POST /api/admin/users/:userId/promote': 'Promote user to admin (Admin only)',
       'POST /api/admin/users/:userId/demote': 'Demote admin to regular user (Admin only)',
-      'DELETE /api/admin/users/:userId': 'Delete a regular user and their data (Admin only)'
+      'DELETE /api/admin/users/:userId': 'Delete a regular user and their data (Admin only)',
+      'PUT /api/admin/projects/:id/approve': 'Approve/unapprove a project (Admin only)'
     }
   });
 });
@@ -871,6 +872,69 @@ app.delete('/api/projects/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting project:', error);
     res.status(500).json({ success: false, message: 'Error deleting project', error: error.message });
+  }
+});
+
+// Admin Project Approval Endpoint
+app.put('/api/admin/projects/:id/approve', async (req, res) => {
+  try {
+    const projectId = req.params.id;
+    const { user_id } = req.body;
+    
+    console.log('🔐 Admin approval request:', { projectId, user_id });
+    
+    // Check if user is admin
+    const adminCheck = await executeQuery('SELECT isAdmin FROM user WHERE UserID = ?', [user_id]);
+    if (!adminCheck || adminCheck.length === 0 || !adminCheck[0].isAdmin) {
+      return res.status(403).json({ success: false, message: 'Admin access required' });
+    }
+    
+    // Get current project status
+    const project = await executeQuery('SELECT * FROM project WHERE ProjectID = ?', [projectId]);
+    if (project.length === 0) {
+      return res.status(404).json({ success: false, message: 'Project not found' });
+    }
+    
+    const currentStatus = project[0];
+    let updateResult;
+    
+    if (currentStatus.Approved === 1) {
+      // Project is already approved, unapprove it
+      updateResult = await executeQuery(
+        'UPDATE project SET Approved = 0, NeedsReview = 1, DateModified = ? WHERE ProjectID = ?',
+        [new Date().toISOString().split('T')[0], projectId]
+      );
+      
+      if (updateResult.affectedRows > 0) {
+        res.json({ 
+          success: true, 
+          message: 'Project unapproved successfully',
+          newStatus: { approved: false, needsReview: true }
+        });
+      } else {
+        res.status(500).json({ success: false, message: 'Failed to unapprove project' });
+      }
+    } else {
+      // Project is not approved, approve it
+      updateResult = await executeQuery(
+        'UPDATE project SET Approved = 1, NeedsReview = 0, DateModified = ? WHERE ProjectID = ?',
+        [new Date().toISOString().split('T')[0], projectId]
+      );
+      
+      if (updateResult.affectedRows > 0) {
+        res.json({ 
+          success: true, 
+          message: 'Project approved successfully',
+          newStatus: { approved: true, needsReview: false }
+        });
+      } else {
+        res.status(500).json({ success: false, message: 'Failed to approve project' });
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error updating project approval:', error);
+    res.status(500).json({ success: false, message: 'Error updating project approval', error: error.message });
   }
 });
 

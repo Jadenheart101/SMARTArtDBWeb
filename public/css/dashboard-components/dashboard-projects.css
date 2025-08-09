@@ -328,6 +328,34 @@
     background: var(--danger-hover, #c0392b);
 }
 
+.project-card-btn-success {
+    background: #28a745;
+    color: white;
+    border: 1px solid #28a745;
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.2);
+}
+
+.project-card-btn-success:hover {
+    background: #218838;
+    border-color: #1e7e34;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+}
+
+.project-card-btn-warning {
+    background: #ffc107;
+    color: #212529;
+    border: 1px solid #ffc107;
+    box-shadow: 0 2px 4px rgba(255, 193, 7, 0.2);
+}
+
+.project-card-btn-warning:hover {
+    background: #e0a800;
+    border-color: #d39e00;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(255, 193, 7, 0.3);
+}
+
 .projects-empty {
     grid-column: 1 / -1;
     text-align: center;
@@ -827,6 +855,28 @@
     text-shadow: none;
     box-shadow: 0 2px 8px rgba(251, 191, 36, 0.3);
     border: 1px solid rgba(251, 191, 36, 0.4);
+}
+
+.admin-filter-select {
+    padding: 0.5rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: white;
+    color: #374151;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-left: 0.5rem;
+}
+
+.admin-filter-select:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.admin-filter-select:hover {
+    border-color: #9ca3af;
 }
 
 /* Admin Stats - Match main stats grid pattern */

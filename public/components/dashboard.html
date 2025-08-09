@@ -358,6 +358,12 @@
                           <button class="btn btn-secondary" onclick="refreshAllProjects()">
                               <i class="fas fa-sync-alt"></i> Refresh
                           </button>
+                          <select id="admin-project-filter" onchange="filterAdminProjects()" class="admin-filter-select">
+                              <option value="all">All Projects</option>
+                              <option value="approved">Approved Only</option>
+                              <option value="pending">Needs Review Only</option>
+                              <option value="rejected">Not Approved</option>
+                          </select>
                           <span class="admin-badge">Administrator</span>
                       </div>
                   </div>
@@ -365,6 +371,14 @@
                       <div class="admin-stat">
                           <i class="fas fa-project-diagram"></i>
                           <span>Total Projects: <strong id="admin-total-projects">0</strong></span>
+                      </div>
+                      <div class="admin-stat">
+                          <i class="fas fa-check-circle" style="color: #28a745;"></i>
+                          <span>Approved: <strong id="admin-approved-projects">0</strong></span>
+                      </div>
+                      <div class="admin-stat">
+                          <i class="fas fa-clock" style="color: #ffc107;"></i>
+                          <span>Needs Review: <strong id="admin-pending-projects">0</strong></span>
                       </div>
                       <div class="admin-stat">
                           <i class="fas fa-users"></i>

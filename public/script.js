@@ -1943,6 +1943,8 @@ async function loadAdminProjects() {
     const adminSection = document.getElementById('admin-projects-section');
     const adminGrid = document.getElementById('admin-projects-grid');
     const totalProjectsElement = document.getElementById('admin-total-projects');
+    const approvedProjectsElement = document.getElementById('admin-approved-projects');
+    const pendingProjectsElement = document.getElementById('admin-pending-projects');
     const activeCreatorsElement = document.getElementById('admin-active-creators');
     
     // Show admin section
@@ -1960,6 +1962,16 @@ async function loadAdminProjects() {
             // Update admin statistics
             if (totalProjectsElement) {
                 totalProjectsElement.textContent = allProjects.length;
+            }
+            
+            if (approvedProjectsElement) {
+                const approvedCount = allProjects.filter(p => p.Approved === 1).length;
+                approvedProjectsElement.textContent = approvedCount;
+            }
+            
+            if (pendingProjectsElement) {
+                const pendingCount = allProjects.filter(p => p.NeedsReview === 1).length;
+                pendingProjectsElement.textContent = pendingCount;
             }
             
             if (activeCreatorsElement) {
@@ -2032,6 +2044,14 @@ async function loadAdminProjects() {
                                         <button class="project-card-btn project-card-btn-primary" onclick="viewProject(${project.ProjectID})" title="View Project">
                                             <i class="fas fa-eye"></i> View
                                         </button>
+                                        ${project.Approved === 1 ? 
+                                            `<button class="project-card-btn project-card-btn-warning" onclick="adminApproveProject(${project.ProjectID}, '${project.ProjectName.replace(/'/g, '\\\'')}')" title="Unapprove Project">
+                                                <i class="fas fa-times-circle"></i> Unapprove
+                                            </button>` :
+                                            `<button class="project-card-btn project-card-btn-success" onclick="adminApproveProject(${project.ProjectID}, '${project.ProjectName.replace(/'/g, '\\\'')}')" title="Approve Project">
+                                                <i class="fas fa-check-circle"></i> Approve
+                                            </button>`
+                                        }
                                         <button class="project-card-btn project-card-btn-info" onclick="viewCreatorProjects('${project.creator_name}')" title="View Creator's Projects">
                                             <i class="fas fa-user-circle"></i> Creator
                                         </button>
@@ -2746,6 +2766,92 @@ async function adminDeleteProject(projectId, projectName) {
         console.error('Admin delete project error:', error);
         showNotification('Failed to delete project', 'error');
     }
+}
+
+// Admin approve/unapprove project function
+async function adminApproveProject(projectId, projectName) {
+    console.log('🔐 Admin approval action for project:', projectId);
+    
+    // Get current user info for authorization
+    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    if (!currentUser) {
+        showNotification('Please log in first', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/admin/projects/${projectId}/approve`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                user_id: currentUser.id
+            })
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+            const action = result.newStatus.approved ? 'approved' : 'unapproved';
+            showNotification(`Project "${projectName}" has been ${action} successfully!`, 'success');
+            
+            // Reload admin projects to show updated status
+            loadAdminProjects();
+            
+            // Refresh the main gallery if gallery elements exist
+            const galleryGrid = document.getElementById('galleryGrid');
+            if (galleryGrid) {
+                loadGallery();
+            }
+            
+            // Refresh the user dashboard if dashboard elements exist (for regular users viewing their projects)
+            const userProjectsGrid = document.getElementById('user-projects-grid');
+            if (userProjectsGrid) {
+                loadDashboardData();
+            }
+        } else {
+            showNotification(result.message || 'Failed to update project approval status', 'error');
+        }
+    } catch (error) {
+        console.error('Admin approval error:', error);
+        showNotification('Error updating project approval status. Please try again.', 'error');
+    }
+}
+
+// Filter admin projects based on approval status
+function filterAdminProjects() {
+    const filterSelect = document.getElementById('admin-project-filter');
+    const filterValue = filterSelect ? filterSelect.value : 'all';
+    
+    console.log('🔍 Filtering admin projects by:', filterValue);
+    
+    const adminCards = document.querySelectorAll('.admin-project-card');
+    
+    adminCards.forEach(card => {
+        const statusElement = card.querySelector('.project-card-status');
+        const statusText = statusElement ? statusElement.textContent.trim() : '';
+        
+        let shouldShow = true;
+        
+        switch (filterValue) {
+            case 'approved':
+                shouldShow = statusText === 'Approved';
+                break;
+            case 'pending':
+                shouldShow = statusText === 'Needs Review';
+                break;
+            case 'rejected':
+                shouldShow = statusText === 'Pending' || (statusText !== 'Approved' && statusText !== 'Needs Review');
+                break;
+            case 'all':
+            default:
+                shouldShow = true;
+                break;
+        }
+        
+        card.style.display = shouldShow ? 'block' : 'none';
+    });
 }
 
 // Dashboard Action Functions
