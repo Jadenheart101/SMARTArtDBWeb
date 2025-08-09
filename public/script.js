@@ -6810,6 +6810,33 @@ function updateStatsDisplay(stats) {
     if (statElements.users) statElements.users.textContent = tableCounts.user || 0;
     if (statElements.art) statElements.art.textContent = tableCounts.art || 0;
     if (statElements.topics) statElements.topics.textContent = tableCounts.project_topics || 0;
+    
+    // Update tab buttons with record counts
+    updateTabButtonCounts(tableCounts);
+}
+
+function updateTabButtonCounts(tableCounts) {
+    // Mapping of table names to tab button IDs and display names
+    const tabMappings = {
+        'user': { id: 'tab-user', icon: 'fas fa-users', name: 'Users' },
+        'project': { id: 'tab-project', icon: 'fas fa-folder', name: 'Projects' },
+        'project_topics': { id: 'tab-project_topics', icon: 'fas fa-list', name: 'Topics' },
+        'poi': { id: 'tab-poi', icon: 'fas fa-map-marker-alt', name: 'POIs' },
+        'card': { id: 'tab-card', icon: 'fas fa-sticky-note', name: 'Cards' },
+        'art': { id: 'tab-art', icon: 'fas fa-palette', name: 'Art' },
+        'media_files': { id: 'tab-media_files', icon: 'fas fa-file-image', name: 'Media Files' }
+    };
+    
+    // Update each tab button with count
+    Object.entries(tabMappings).forEach(([tableName, config]) => {
+        const tabButton = document.getElementById(config.id);
+        if (tabButton) {
+            const count = tableCounts[tableName] || 0;
+            tabButton.innerHTML = `
+                <i class="${config.icon}"></i> ${config.name} (${count})
+            `;
+        }
+    });
 }
 
 function switchDatabaseTable(tableName) {
@@ -7015,11 +7042,29 @@ function formatFileSize(bytes) {
 }
 
 function updateTableInfo(tableName, pagination) {
-    const tableInfo = document.getElementById('table-info');
-    if (tableInfo && pagination) {
-        const start = ((pagination.currentPage - 1) * pagination.limit) + 1;
-        const end = Math.min(pagination.currentPage * pagination.limit, pagination.total);
-        tableInfo.textContent = `${formatColumnName(tableName)} Table (${start}-${end} of ${pagination.total} records)`;
+    // Update table name
+    const tableNameElement = document.getElementById('table-name');
+    if (tableNameElement) {
+        tableNameElement.textContent = formatColumnName(tableName);
+    }
+    
+    // Update record count
+    const tableRecordCount = document.getElementById('table-record-count');
+    if (tableRecordCount) {
+        if (pagination && pagination.total !== undefined) {
+            // Check if we have valid pagination data (server returns 'page', not 'currentPage')
+            if (pagination.page && pagination.limit && !isNaN(pagination.page) && !isNaN(pagination.limit)) {
+                const start = ((pagination.page - 1) * pagination.limit) + 1;
+                const end = Math.min(pagination.page * pagination.limit, pagination.total);
+                tableRecordCount.textContent = `${start}-${end} of ${pagination.total} records`;
+            } else {
+                // Just show total count if pagination data is incomplete
+                tableRecordCount.textContent = `${pagination.total} records`;
+            }
+        } else {
+            // Default fallback
+            tableRecordCount.textContent = '0 records';
+        }
     }
 }
 
@@ -7028,16 +7073,21 @@ function updatePaginationControls(pagination) {
     const nextButton = document.getElementById('db-next-page');
     const paginationInfo = document.getElementById('pagination-info');
     
-    if (prevButton) {
-        prevButton.disabled = !pagination.hasPrev;
-    }
-    
-    if (nextButton) {
-        nextButton.disabled = !pagination.hasNext;
-    }
-    
-    if (paginationInfo) {
-        paginationInfo.textContent = `Page ${pagination.currentPage} of ${pagination.totalPages}`;
+    if (pagination) {
+        const hasPrev = pagination.page > 1;
+        const hasNext = pagination.page < pagination.totalPages;
+        
+        if (prevButton) {
+            prevButton.disabled = !hasPrev;
+        }
+        
+        if (nextButton) {
+            nextButton.disabled = !hasNext;
+        }
+        
+        if (paginationInfo) {
+            paginationInfo.textContent = `Page ${pagination.page} of ${pagination.totalPages}`;
+        }
     }
 }
 
