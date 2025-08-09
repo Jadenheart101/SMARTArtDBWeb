@@ -993,6 +993,58 @@ async function viewProject(projectID) {
                 console.log('🎨 No image - skipping art info lookup');
             }
             
+            // Check if admin is viewing another user's project and adjust interface accordingly
+            const isOwnProject = project.user_id === currentUser.id;
+            const isAdmin = currentUser.isAdmin;
+            
+            console.log('🔍 Project ownership check:', {
+                projectUserId: project.user_id,
+                currentUserId: currentUser.id,
+                isOwnProject: isOwnProject,
+                isAdmin: isAdmin
+            });
+            
+            // Get the Edit Project button and Add Topic button
+            const editProjectBtn = document.querySelector('#viewProjectModal .btn-primary');
+            const addTopicBtn = document.getElementById('addTopicBtn');
+            
+            if (isAdmin && !isOwnProject) {
+                // Admin viewing another user's project - show view-only mode
+                console.log('🔧 Admin viewing other user\'s project - enabling view-only mode');
+                
+                if (editProjectBtn) {
+                    editProjectBtn.innerHTML = '<i class="fas fa-crown"></i> Admin View Only';
+                    editProjectBtn.onclick = function() {
+                        showNotification('Admin users can approve/unapprove projects from the admin panel, but cannot edit other users\' projects directly.', 'info');
+                    };
+                    editProjectBtn.className = 'btn btn-info';
+                }
+                
+                if (addTopicBtn) {
+                    addTopicBtn.style.display = 'none';
+                }
+                
+                // Show admin notice
+                console.log('ℹ️ Admin view mode activated');
+                
+            } else {
+                // User viewing their own project or regular user - enable editing
+                console.log('✏️ Enabling full edit mode');
+                
+                if (editProjectBtn) {
+                    editProjectBtn.innerHTML = '<i class="fas fa-edit"></i> Edit Project';
+                    editProjectBtn.onclick = function() {
+                        closeViewProjectModal();
+                        editProject(window.currentViewingProjectId);
+                    };
+                    editProjectBtn.className = 'btn btn-primary';
+                }
+                
+                if (addTopicBtn) {
+                    addTopicBtn.style.display = 'inline-block';
+                }
+            }
+            
             console.log('🔍 === PROJECT VIEW COMPLETE ===');
             
         } else {
@@ -1108,12 +1160,46 @@ async function loadProjectArtInfo(project) {
             window.currentProjectArtId = artInfo.ArtId;
             window.currentProjectMediaFile = filename;
             
+            // Check if this is admin viewing another user's project
+            const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+            const isAdmin = currentUser && currentUser.isAdmin;
+            const isOwnProject = project.user_id === currentUser.id;
+            
+            // Handle art info edit button visibility
+            const editArtBtn = document.querySelector('#viewProjectArtInfo .btn-secondary');
+            if (editArtBtn) {
+                if (isAdmin && !isOwnProject) {
+                    editArtBtn.style.display = 'none';
+                    console.log('🔒 Admin view-only: Hiding art info edit button');
+                } else {
+                    editArtBtn.style.display = 'inline-block';
+                    console.log('✏️ Edit mode: Showing art info edit button');
+                }
+            }
+            
             console.log('🎉 Art info successfully displayed!');
             
         } else {
             console.log('ℹ️ No art info found for media:', filename, 'API result:', result);
             // Keep showing the no-art-info container with the option to add
             window.currentProjectMediaFile = filename;
+            
+            // Check if this is admin viewing another user's project
+            const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+            const isAdmin = currentUser && currentUser.isAdmin;
+            const isOwnProject = project.user_id === currentUser.id;
+            
+            // Handle add art info button visibility
+            const addArtBtn = document.querySelector('#viewProjectNoArtInfo .btn-primary');
+            if (addArtBtn) {
+                if (isAdmin && !isOwnProject) {
+                    addArtBtn.style.display = 'none';
+                    console.log('🔒 Admin view-only: Hiding add art info button');
+                } else {
+                    addArtBtn.style.display = 'inline-block';
+                    console.log('✏️ Edit mode: Showing add art info button');
+                }
+            }
         }
         
     } catch (error) {
@@ -3942,11 +4028,24 @@ function showAddArtInfoModal(mediaFilename = null) {
     let imageInfo = null;
     
     if (mediaFilename) {
-        // Called from project view - use the media filename
+        // Called from project view - get the correct image URL from thumbnail if available
         console.log('Using media filename from project view:', mediaFilename);
+        
+        // Try to get the correct image URL from the project thumbnail
+        const thumbnailImg = document.getElementById('editProjectThumbnailImg');
+        let imageUrl = `/media/user_${currentUser.username}/images/${mediaFilename}`;
+        
+        if (thumbnailImg && thumbnailImg.src) {
+            // Use the actual image URL from the thumbnail (which should be correct)
+            imageUrl = thumbnailImg.src;
+            console.log('Using thumbnail image URL:', imageUrl);
+        } else {
+            console.log('Thumbnail not found, using constructed URL:', imageUrl);
+        }
+        
         imageInfo = {
             id: mediaFilename,
-            src: `/media/user_${currentUser.username}/images/${mediaFilename}`,
+            src: imageUrl,
             name: mediaFilename
         };
     } else {
@@ -4326,15 +4425,15 @@ async function loadProjectTopics(projectId) {
         if (result.success) {
             currentProjectTopics = result.data || [];
             
-            // Initialize expansion states (collapsed by default)
-            currentProjectTopics.forEach(topic => {
-                topic.is_expanded = false; // Topics start collapsed
+            // Initialize expansion states (first topic expanded by default for better UX)
+            currentProjectTopics.forEach((topic, topicIndex) => {
+                topic.is_expanded = topicIndex === 0; // First topic starts expanded
                 if (topic.pois) {
-                    topic.pois.forEach(poi => {
-                        poi.is_expanded = false; // POIs start collapsed
+                    topic.pois.forEach((poi, poiIndex) => {
+                        poi.is_expanded = topicIndex === 0 && poiIndex === 0; // First POI of first topic starts expanded
                         if (poi.cards) {
-                            poi.cards.forEach(card => {
-                                card.is_expanded = false; // Cards start collapsed
+                            poi.cards.forEach((card, cardIndex) => {
+                                card.is_expanded = false; // Cards still start collapsed
                             });
                         }
                     });
@@ -4577,8 +4676,16 @@ function displayCards(cards) {
 
 // Toggle topic expansion
 async function toggleTopic(topicId) {
-    const topic = currentProjectTopics.find(t => t.TopicID === topicId);
-    if (!topic) return;
+    console.log('🔧 DEBUG: toggleTopic called with topicId:', topicId, 'type:', typeof topicId);
+    
+    // Convert to number for consistent comparison
+    const numericTopicId = parseInt(topicId);
+    
+    const topic = currentProjectTopics.find(t => parseInt(t.TopicID) === numericTopicId);
+    if (!topic) {
+        console.error('🔧 DEBUG: Topic not found with ID:', topicId);
+        return;
+    }
 
     // Just toggle the UI state (no server update needed for this)
     topic.is_expanded = !topic.is_expanded;
@@ -4601,7 +4708,10 @@ async function toggleTopic(topicId) {
 
 // Toggle POI expansion
 async function togglePOI(poiId) {
-    console.log('🔧 DEBUG: togglePOI called with poiId:', poiId);
+    console.log('🔧 DEBUG: togglePOI called with poiId:', poiId, 'type:', typeof poiId);
+    
+    // Convert to number for consistent comparison
+    const numericPoiId = parseInt(poiId);
     
     // Find the POI in the current project topics
     let targetPOI = null;
@@ -4612,7 +4722,7 @@ async function togglePOI(poiId) {
         const topic = currentProjectTopics[i];
         if (topic.pois) {
             for (let j = 0; j < topic.pois.length; j++) {
-                if (topic.pois[j].POIID === poiId) {
+                if (parseInt(topic.pois[j].POIID) === numericPoiId) {
                     targetPOI = topic.pois[j];
                     topicIndex = i;
                     poiIndex = j;
@@ -4687,7 +4797,10 @@ async function togglePOI(poiId) {
 
 // Toggle Card expansion
 async function toggleCard(cardId) {
-    console.log('🔧 DEBUG: toggleCard called with cardId:', cardId);
+    console.log('🔧 DEBUG: toggleCard called with cardId:', cardId, 'type:', typeof cardId);
+    
+    // Convert to number for consistent comparison
+    const numericCardId = parseInt(cardId);
     
     // Find the card in the current project topics
     let targetCard = null;
@@ -4702,7 +4815,7 @@ async function toggleCard(cardId) {
                 const poi = topic.pois[j];
                 if (poi.cards) {
                     for (let k = 0; k < poi.cards.length; k++) {
-                        if (poi.cards[k].CardID === cardId) {
+                        if (parseInt(poi.cards[k].CardID) === numericCardId) {
                             targetCard = poi.cards[k];
                             topicIndex = i;
                             poiIndex = j;
@@ -5244,11 +5357,11 @@ async function uploadPOIImage(poiId) {
             
             console.log('📍 POI IMAGE: Upload response:', {
                 success: uploadResult.success,
-                fileUrl: uploadResult.fileUrl,
+                fileUrl: uploadResult.file?.url,
                 message: uploadResult.message
             });
             
-            if (uploadResult.success) {
+            if (uploadResult.success && uploadResult.file?.url) {
                 console.log('📍 POI IMAGE: 📤 Updating POI with image URL');
                 
                 // Update POI with image path
@@ -5258,12 +5371,12 @@ async function uploadPOIImage(poiId) {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        pImage: uploadResult.fileUrl
+                        pImage: uploadResult.file.url
                     })
                 });
                 
                 console.log('📍 POI IMAGE: Update request body:', {
-                    pImage: uploadResult.fileUrl
+                    pImage: uploadResult.file.url
                 });
                 
                 const updateResult = await updateResponse.json();
@@ -6718,3 +6831,11 @@ function updateTableActionsVisibility() {
         currentOrphanedRecords = [];
     }
 }
+
+// ========== Global Function Assignments for View Project Modal ==========
+// These functions need to be available globally for onclick handlers in the view project modal
+
+window.toggleTopic = toggleTopic;
+window.togglePOI = togglePOI;
+window.toggleCard = toggleCard;
+window.previewCardMedia = previewCardMedia;
