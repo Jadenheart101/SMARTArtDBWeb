@@ -27,6 +27,41 @@ async function testConnection() {
     const connection = await pool.getConnection();
     console.log('✅ Database connected successfully');
     connection.release();
+    
+    // DEBUG: On server start, log some basic database information
+    setTimeout(async () => {
+      try {
+        console.log('\n🔍 === DATABASE DEBUG INFO ON STARTUP ===');
+        
+        const projectCount = await executeQuery('SELECT COUNT(*) as count FROM project');
+        console.log('📊 Total projects in database:', projectCount[0].count);
+        
+        if (projectCount[0].count > 0) {
+          const sampleProjects = await executeQuery('SELECT ProjectID, ProjectName, Description, DateCreated FROM project LIMIT 3');
+          console.log('📋 Sample projects:');
+          sampleProjects.forEach(p => {
+            console.log(`  - ID ${p.ProjectID}: "${p.ProjectName}" (Description: ${p.Description ? '"' + p.Description.substring(0, 50) + '..."' : 'NULL'})`);
+          });
+        }
+        
+        const topicCount = await executeQuery('SELECT COUNT(*) as count FROM project_topics');
+        console.log('📝 Total topics in database:', topicCount[0].count);
+        
+        const poiCount = await executeQuery('SELECT COUNT(*) as count FROM poi');
+        console.log('📍 Total POIs in database:', poiCount[0].count);
+        
+        const cardCount = await executeQuery('SELECT COUNT(*) as count FROM card');
+        console.log('📄 Total cards in database:', cardCount[0].count);
+        
+        const artCount = await executeQuery('SELECT COUNT(*) as count FROM art');
+        console.log('🎨 Total art records in database:', artCount[0].count);
+        
+        console.log('===========================================\n');
+      } catch (error) {
+        console.error('❌ Error during database debug:', error);
+      }
+    }, 1000);
+    
     return true;
   } catch (error) {
     console.error('❌ Database connection failed:', error.message);

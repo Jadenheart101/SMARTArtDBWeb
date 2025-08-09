@@ -431,11 +431,23 @@ app.get('/api/art/media/:mediaId', async (req, res) => {
     const mediaId = req.params.mediaId;
     console.log('🎨 GET /api/art/media/:mediaId called with mediaId:', mediaId);
     
-    const artwork = await executeQuery('SELECT * FROM art WHERE artcol = ?', [mediaId]);
-    console.log('🎨 Database query result:', artwork.length, 'artworks found');
+    // First, try to find the media file to get its ID
+    const mediaFiles = await executeQuery('SELECT id FROM media_files WHERE file_name = ?', [mediaId]);
+    
+    if (mediaFiles.length === 0) {
+      console.log('🎨 No media file found with filename:', mediaId);
+      return res.status(404).json({ success: false, message: 'Media file not found' });
+    }
+    
+    const mediaFileId = mediaFiles[0].id;
+    console.log('🎨 Found media file ID:', mediaFileId);
+    
+    // Now look for art records linked to this media file ID
+    const artwork = await executeQuery('SELECT * FROM art WHERE artcol = ?', [mediaFileId.toString()]);
+    console.log('🎨 Database query result:', artwork.length, 'artworks found for media file ID:', mediaFileId);
     
     if (artwork.length === 0) {
-      console.log('🎨 No artwork found for media ID:', mediaId);
+      console.log('🎨 No artwork found for media file ID:', mediaFileId);
       return res.status(404).json({ success: false, message: 'No artwork found for this media file' });
     }
     
@@ -738,6 +750,8 @@ app.get('/api/projects/:id', async (req, res) => {
   try {
     const projectId = req.params.id;
     
+    console.log('🔍 GET /api/projects/:id called for project:', projectId);
+    
     // Join with media_files table to get image information if linked
     const query = `
       SELECT 
@@ -751,12 +765,18 @@ app.get('/api/projects/:id', async (req, res) => {
       WHERE p.ProjectID = ?
     `;
     
+    console.log('🔍 Executing query:', query, 'with params:', [projectId]);
+    
     const projects = await executeQuery(query, [projectId]);
+    console.log('🔍 Raw database result:', projects);
+    
     if (projects.length === 0) {
+      console.log('❌ No project found with ID:', projectId);
       return res.status(404).json({ success: false, message: 'Project not found' });
     }
     
     const project = projects[0];
+    console.log('🔍 Raw project data from DB:', project);
     
     // Map database fields to frontend expectations
     const responseData = {
@@ -774,9 +794,11 @@ app.get('/api/projects/:id', async (req, res) => {
       ImageName: project.media_display_name || project.file_name
     };
     
+    console.log('🔍 Response data being sent:', responseData);
+    
     res.json({ success: true, data: responseData });
   } catch (error) {
-    console.error('Error fetching project:', error);
+    console.error('❌ Error fetching project:', error);
     res.status(500).json({ success: false, message: 'Error fetching project', error: error.message });
   }
 });
@@ -1270,26 +1292,38 @@ app.get('/api/projects/:id/topics', async (req, res) => {
   try {
     const projectId = req.params.id;
     
+    console.log('📋 GET /api/projects/:id/topics called for project:', projectId);
+    
     // Get topics for the project using project_topics table
     const topics = await executeQuery(
       'SELECT *, id as TopicID, project_id as ProjectID_FK, topic_title as Label FROM project_topics WHERE project_id = ? ORDER BY topic_order, id',
       [projectId]
     );
     
+    console.log('📋 Found', topics.length, 'topics for project:', projectId);
+    
     // For each topic, get its POIs and cards
     const topicsWithContent = await Promise.all(topics.map(async (topic) => {
+      console.log('📋 Processing topic:', topic.TopicID, topic.Label);
+      
       // Get POIs for this topic (using actual column names)
       const pois = await executeQuery(
         'SELECT *, id as POIID, topic_id as TopicID_FK, x_coordinate as XCoord, y_coordinate as YCoord FROM poi WHERE topic_id = ? ORDER BY id',
         [topic.TopicID]
       );
       
+      console.log('📍 Found', pois.length, 'POIs for topic:', topic.TopicID);
+      
       // For each POI, get its cards (using actual column names)
       const poisWithCards = await Promise.all(pois.map(async (poi) => {
+        console.log('📍 Processing POI:', poi.POIID);
+        
         const cards = await executeQuery(
           'SELECT *, id as CardID, poi_id as POIID_FK, card_title as Title, card_content as Body, user_notes as Notes, refs as `References` FROM card WHERE poi_id = ? ORDER BY card_order, id',
           [poi.POIID]
         );
+        
+        console.log('📄 Found', cards.length, 'cards for POI:', poi.POIID);
         
         // For each card, get its media
         const cardsWithMedia = await Promise.all(cards.map(async (card) => {
@@ -1299,6 +1333,9 @@ app.get('/api/projects/:id/topics', async (req, res) => {
             JOIN media_files mf ON cm.Media_ID_FK = mf.id
             WHERE cm.Card_ID_FK = ?
           `, [card.CardID]);
+          
+          console.log('🖼️ Found', media.length, 'media files for card:', card.CardID);
+          
           return { ...card, media };
         }));
         
@@ -1312,9 +1349,11 @@ app.get('/api/projects/:id/topics', async (req, res) => {
       };
     }));
     
+    console.log('📋 Sending topics response with', topicsWithContent.length, 'topics');
+    
     res.json({ success: true, data: topicsWithContent });
   } catch (error) {
-    console.error('Error fetching project topics:', error);
+    console.error('❌ Error fetching project topics:', error);
     res.status(500).json({ success: false, message: 'Error fetching project topics', error: error.message });
   }
 });

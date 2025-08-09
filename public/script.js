@@ -873,16 +873,28 @@ async function viewProject(projectID) {
     const currentUser = JSON.parse(localStorage.getItem('currentUser'));
     if (!currentUser) return;
 
+    console.log('🔍 === PROJECT VIEW DEBUG START ===');
+    console.log('📊 Viewing project ID:', projectID);
+
     try {
         const response = await fetch(`${API_BASE_URL}/projects/${projectID}`);
         const result = await response.json();
+        
+        console.log('📊 Project API response:', result);
+        
         if (result.success && result.data) {
             const project = result.data;
             
-            // Debug logging
-            console.log('Project data received:', project);
-            console.log('Description:', project.Description);
-            console.log('ImageURL:', project.ImageURL);
+            // Enhanced Debug logging
+            console.log('📊 Project data analysis:');
+            console.log('  ✅ ProjectName:', project.ProjectName || 'MISSING');
+            console.log('  📝 Description:', project.Description ? `"${project.Description}"` : 'NULL/EMPTY');
+            console.log('  🖼️ ImageURL:', project.ImageURL || 'NULL/EMPTY');
+            console.log('  📅 DateCreated:', project.DateCreated || 'MISSING');
+            console.log('  📅 DateModified:', project.DateModified || 'MISSING');
+            console.log('  ✅ Approved:', project.Approved);
+            console.log('  ⚠️ NeedsReview:', project.NeedsReview);
+            console.log('  🔗 ImageID:', project.ImageID || 'NULL');
             
             // Store project ID for potential editing
             window.currentViewingProjectId = projectID;
@@ -901,10 +913,14 @@ async function viewProject(projectID) {
                 const description = project.Description;
                 if (description && description.trim() !== '') {
                     descriptionElement.textContent = description;
+                    descriptionElement.style.fontStyle = 'normal';
+                    descriptionElement.style.color = 'inherit';
+                    console.log('📝 Description displayed:', description);
                 } else {
                     descriptionElement.textContent = 'No description available';
                     descriptionElement.style.fontStyle = 'italic';
                     descriptionElement.style.color = '#9ca3af';
+                    console.log('📝 No description - showing placeholder');
                 }
             }
             
@@ -925,13 +941,14 @@ async function viewProject(projectID) {
             }
             statusElement.className = `project-status ${statusClass}`;
             statusElement.textContent = statusLabel;
+            console.log('📊 Status set to:', statusLabel);
             
             // Handle project image
             const imageContainer = document.getElementById('viewProjectImageContainer');
             const noImageContainer = document.getElementById('viewProjectNoImage');
             
-            console.log('Image elements found:', { imageContainer, noImageContainer });
-            console.log('Project ImageURL:', project.ImageURL);
+            console.log('🖼️ Image elements found:', { imageContainer: !!imageContainer, noImageContainer: !!noImageContainer });
+            console.log('🖼️ Project ImageURL:', project.ImageURL);
             
             if (project.ImageURL && project.ImageURL.trim() !== '') {
                 if (imageContainer && noImageContainer) {
@@ -945,10 +962,11 @@ async function viewProject(projectID) {
                         img.src = project.ImageURL;
                         img.alt = project.ProjectName || 'Project image';
                         img.onerror = function() {
-                            console.error('Failed to load image:', project.ImageURL);
+                            console.error('❌ Failed to load image:', project.ImageURL);
                             imageContainer.style.display = 'none';
                             noImageContainer.style.display = 'block';
                         };
+                        console.log('🖼️ Image set:', project.ImageURL);
                     }
                     
                     if (imgName) {
@@ -959,20 +977,30 @@ async function viewProject(projectID) {
                 if (imageContainer && noImageContainer) {
                     imageContainer.style.display = 'none';
                     noImageContainer.style.display = 'block';
+                    console.log('🖼️ No image - showing placeholder');
                 }
             }
             
             // Load project topics
+            console.log('📋 Loading project topics...');
             await loadProjectTopics(projectID);
             
             // Load art information if project has an image
-            await loadProjectArtInfo(project);
+            if (project.ImageURL) {
+                console.log('🎨 Loading art information...');
+                await loadProjectArtInfo(project);
+            } else {
+                console.log('🎨 No image - skipping art info lookup');
+            }
+            
+            console.log('🔍 === PROJECT VIEW COMPLETE ===');
             
         } else {
+            console.error('❌ Failed to load project:', result);
             showNotification('Failed to load project details', 'error');
         }
     } catch (error) {
-        console.error('Error loading project:', error);
+        console.error('❌ Error loading project:', error);
         showNotification('Error loading project details', 'error');
     }
 }
@@ -1211,6 +1239,11 @@ async function editProject(projectID) {
             // Load project topics for editing
             await loadEditTopics(projectID);
             
+            // Load art information for the project image if it exists
+            if (project.ImageID && project.ImageURL) {
+                await loadEditProjectArtInfo(project);
+            }
+            
             // Debug: Check if form actions are present
             setTimeout(() => {
                 const formActions = document.querySelector('#editProjectModal .form-actions');
@@ -1231,6 +1264,137 @@ async function editProject(projectID) {
     } catch (error) {
         console.error('Error loading project:', error);
         showNotification('Error loading project details', 'error');
+    }
+}
+
+// Function to load art information for edit project mode
+async function loadEditProjectArtInfo(project) {
+    console.log('🎨 loadEditProjectArtInfo called with project:', project);
+    
+    const artInfoContainer = document.getElementById('editProjectArtInfo');
+    const noArtInfoContainer = document.getElementById('editProjectNoArtInfo');
+    
+    console.log('Edit art info containers found:', { 
+        artInfoContainer: !!artInfoContainer, 
+        noArtInfoContainer: !!noArtInfoContainer 
+    });
+    
+    if (!artInfoContainer || !noArtInfoContainer) {
+        console.warn('❌ Edit art info containers not found in DOM');
+        return;
+    }
+    
+    // Hide both containers initially
+    artInfoContainer.style.display = 'none';
+    noArtInfoContainer.style.display = 'block';
+    
+    // Hide both buttons initially
+    const addBtn = document.getElementById('editAddArtInfoBtn');
+    const editBtn = document.getElementById('editEditArtInfoBtn');
+    if (addBtn) addBtn.style.display = 'none';
+    if (editBtn) editBtn.style.display = 'none';
+    
+    // Check if project has an image URL
+    if (!project.ImageURL || project.ImageURL.trim() === '') {
+        console.log('ℹ️ No image URL for project, skipping edit art info');
+        // Hide both buttons since there's no image
+        const addBtn = document.getElementById('editAddArtInfoBtn');
+        const editBtn = document.getElementById('editEditArtInfoBtn');
+        if (addBtn) addBtn.style.display = 'none';
+        if (editBtn) editBtn.style.display = 'none';
+        return;
+    }
+    
+    try {
+        // Extract media filename from the URL
+        const urlParts = project.ImageURL.split('/');
+        const filename = urlParts[urlParts.length - 1];
+        
+        console.log('🔍 Edit mode - URL parts:', urlParts);
+        console.log('📁 Edit mode - Extracted filename:', filename);
+        
+        if (!filename) {
+            console.log('❌ Could not extract filename from ImageURL:', project.ImageURL);
+            return;
+        }
+        
+        console.log('🔎 Edit mode - Looking for art info for media:', filename);
+        
+        // Fetch art information using the media filename
+        const apiUrl = `${API_BASE_URL}/art/media/${encodeURIComponent(filename)}`;
+        console.log('🌐 Edit mode - API URL:', apiUrl);
+        
+        const response = await fetch(apiUrl);
+        console.log('📡 Edit mode - Response status:', response.status);
+        
+        const result = await response.json();
+        console.log('📦 Edit mode - API result:', result);
+        
+        if (result.success && result.data) {
+            console.log('✅ Edit mode - Art info found:', result.data);
+            
+            // Show art info container and hide no-info container
+            artInfoContainer.style.display = 'block';
+            noArtInfoContainer.style.display = 'none';
+            
+            // Show Edit Art Info button, hide Add Art Info button
+            const addBtn = document.getElementById('editAddArtInfoBtn');
+            const editBtn = document.getElementById('editEditArtInfoBtn');
+            if (addBtn) addBtn.style.display = 'none';
+            if (editBtn) editBtn.style.display = 'inline-block';
+            
+            // Populate art information
+            const artInfo = result.data;
+            
+            const elements = {
+                artistName: document.getElementById('editArtArtistName'),
+                artName: document.getElementById('editArtArtName'),
+                artMedia: document.getElementById('editArtArtMedia'),
+                submitor: document.getElementById('editArtSubmitor')
+            };
+            
+            console.log('🎯 Edit mode - Art info elements found:', Object.fromEntries(
+                Object.entries(elements).map(([key, el]) => [key, !!el])
+            ));
+            
+            if (elements.artistName) elements.artistName.textContent = artInfo.ArtistName || 'Unknown';
+            if (elements.artName) elements.artName.textContent = artInfo.ArtName || 'Unknown';
+            if (elements.artMedia) elements.artMedia.textContent = artInfo.ArtMedia || 'Unknown';
+            if (elements.submitor) elements.submitor.textContent = artInfo.Submitor || 'Unknown';
+            
+            // Store the art ID and media filename for editing
+            window.currentEditProjectArtId = artInfo.ArtId;
+            window.currentEditProjectMediaFile = filename;
+            
+            console.log('🎉 Edit mode - Art info successfully displayed!');
+            
+        } else {
+            console.log('ℹ️ Edit mode - No art info found for media:', filename, 'API result:', result);
+            // Show Add Art Info button, hide Edit Art Info button
+            const addBtn = document.getElementById('editAddArtInfoBtn');
+            const editBtn = document.getElementById('editEditArtInfoBtn');
+            if (addBtn) addBtn.style.display = 'inline-block';
+            if (editBtn) editBtn.style.display = 'none';
+            // Keep showing the no-art-info container
+            window.currentEditProjectMediaFile = filename;
+        }
+        
+    } catch (error) {
+        console.error('❌ Edit mode - Error loading art info:', error);
+        // Show Add Art Info button, hide Edit Art Info button for error case
+        const addBtn = document.getElementById('editAddArtInfoBtn');
+        const editBtn = document.getElementById('editEditArtInfoBtn');
+        if (addBtn) addBtn.style.display = 'inline-block';
+        if (editBtn) editBtn.style.display = 'none';
+        // Keep showing the no-art-info container
+    }
+}
+
+// Function to handle editing art info from edit project mode
+function editArtInfoFromProject() {
+    if (window.currentEditProjectMediaFile) {
+        showAddArtInfoModal(window.currentEditProjectMediaFile);
+        // Don't close the edit project modal - user might want to continue editing
     }
 }
 
@@ -1338,6 +1502,13 @@ function selectEditImage(imageId, imageUrl, imageName) {
     
     // Hide gallery and show add button
     hideEditImageGallery();
+    
+    // Load art info for the newly selected image
+    const projectData = {
+        ImageID: imageId,
+        ImageURL: imageUrl
+    };
+    loadEditProjectArtInfo(projectData);
     
     showNotification(`Image "${imageName}" selected for project`, 'success');
 }
@@ -3976,8 +4147,40 @@ async function submitArtInfo() {
             showNotification(`Art information ${action} successfully!`, 'success');
             closeAddArtInfoModal();
             
-            // Optionally refresh any displays that show art information
-            // You could add additional logic here to update the UI
+            // Refresh art info display in edit project modal if it's open
+            const editModal = document.getElementById('editProjectModal');
+            if (editModal && editModal.style.display !== 'none') {
+                console.log('🔄 Refreshing art info in edit project modal...');
+                // Get the current project data and refresh the art info display
+                if (window.currentEditingProjectId) {
+                    // Fetch fresh project data and reload art info
+                    fetch(`${API_BASE_URL}/projects/${window.currentEditingProjectId}`)
+                        .then(response => response.json())
+                        .then(result => {
+                            if (result.success && result.data) {
+                                loadEditProjectArtInfo(result.data);
+                            }
+                        })
+                        .catch(error => console.error('Error refreshing art info:', error));
+                }
+            }
+            
+            // Refresh art info display in view project modal if it's open
+            const viewModal = document.getElementById('viewProjectModal');
+            if (viewModal && viewModal.style.display !== 'none') {
+                console.log('🔄 Refreshing art info in view project modal...');
+                if (window.currentViewingProjectId) {
+                    // Fetch fresh project data and reload art info
+                    fetch(`${API_BASE_URL}/projects/${window.currentViewingProjectId}`)
+                        .then(response => response.json())
+                        .then(result => {
+                            if (result.success && result.data) {
+                                loadProjectArtInfo(result.data);
+                            }
+                        })
+                        .catch(error => console.error('Error refreshing art info:', error));
+                }
+            }
         } else {
             console.error('❌ API returned error:', result.message);
             showNotification(result.message || 'Failed to save art information', 'error');
@@ -4003,27 +4206,45 @@ let currentProjectTopics = [];
 
 // Load project topics for viewing
 async function loadProjectTopics(projectId) {
+    console.log('📋 loadProjectTopics called for project:', projectId);
     try {
         const response = await fetch(`${API_BASE_URL}/projects/${projectId}/topics`);
         const result = await response.json();
         
+        console.log('📋 Topics API response:', {
+            success: result.success,
+            dataLength: result.data ? result.data.length : 0,
+            data: result.data
+        });
+        
         if (result.success) {
             currentProjectTopics = result.data || [];
+            console.log('📋 Set currentProjectTopics to', currentProjectTopics.length, 'topics');
             displayProjectTopics();
         } else {
-            console.error('Failed to load project topics:', result.message);
+            console.error('❌ Failed to load project topics:', result.message);
+            currentProjectTopics = [];
+            displayProjectTopics();
         }
     } catch (error) {
-        console.error('Error loading project topics:', error);
+        console.error('❌ Error loading project topics:', error);
+        currentProjectTopics = [];
+        displayProjectTopics();
     }
 }
 
 // Display project topics in view mode
 function displayProjectTopics() {
     const container = document.getElementById('projectTopicsContainer');
-    if (!container) return;
+    if (!container) {
+        console.warn('❌ projectTopicsContainer not found in DOM');
+        return;
+    }
+
+    console.log('📋 displayProjectTopics called with', currentProjectTopics.length, 'topics');
 
     if (currentProjectTopics.length === 0) {
+        console.log('📋 No topics found - displaying placeholder');
         container.innerHTML = `
             <div class="no-topics-display">
                 <div class="no-topics-placeholder">
@@ -4035,6 +4256,25 @@ function displayProjectTopics() {
         `;
         return;
     }
+
+    console.log('📋 Displaying', currentProjectTopics.length, 'topics:');
+    currentProjectTopics.forEach((topic, index) => {
+        console.log(`  📝 Topic ${index + 1}: "${topic.Label}" (ID: ${topic.TopicID})`);
+        console.log(`    📍 POIs: ${topic.pois ? topic.pois.length : 0}`);
+        if (topic.pois && topic.pois.length > 0) {
+            topic.pois.forEach((poi, poiIndex) => {
+                console.log(`      POI ${poiIndex + 1}: ID ${poi.POIID}, Location: "${poi.pLocation || 'No location'}", Image: ${poi.pImage ? 'Yes' : 'No'}`);
+                if (poi.cards && poi.cards.length > 0) {
+                    console.log(`        📄 Cards: ${poi.cards.length}`);
+                    poi.cards.forEach((card, cardIndex) => {
+                        console.log(`          Card ${cardIndex + 1}: "${card.Title}" (Body: ${card.Body ? 'Yes' : 'No'}, Notes: ${card.Notes ? 'Yes' : 'No'}, Refs: ${card.References ? 'Yes' : 'No'}, Media: ${card.media ? card.media.length : 0})`);
+                    });
+                } else {
+                    console.log(`        📄 Cards: None`);
+                }
+            });
+        }
+    });
 
     const topicsHtml = currentProjectTopics.map(topic => `
         <div class="topic-item" data-topic-id="${topic.TopicID}">
@@ -4056,6 +4296,7 @@ function displayProjectTopics() {
     `).join('');
 
     container.innerHTML = `<div class="topics-list">${topicsHtml}</div>`;
+    console.log('📋 Topics HTML rendered successfully');
 }
 
 // Display POIs for a topic
