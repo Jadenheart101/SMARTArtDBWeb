@@ -131,6 +131,14 @@
                         <p id="viewProjectDescription">No description available</p>
                     </div>
                     
+                    <!-- Admin Notes Section - only visible if admin notes exist -->
+                    <div class="info-section" id="adminNotesSection" style="display: none;">
+                        <h4><i class="fas fa-sticky-note"></i> Admin Notes</h4>
+                        <div class="admin-notes-content">
+                            <p id="viewProjectAdminNotes"></p>
+                        </div>
+                    </div>
+                    
                     <div class="info-section">
                         <h4><i class="fas fa-calendar"></i> Project Dates</h4>
                         <div class="date-info">
@@ -243,6 +251,10 @@
                 </button>
                 <button class="btn btn-primary" onclick="closeViewProjectModal(); editProject(window.currentViewingProjectId);">
                     <i class="fas fa-edit"></i> Edit Project
+                </button>
+                <!-- Admin Notes Button - only visible to admins -->
+                <button class="btn btn-info" id="adminNotesBtn" onclick="openAdminNotesModal()" style="display: none;">
+                    <i class="fas fa-sticky-note"></i> Notes for User
                 </button>
             </div>
         </div>
@@ -877,6 +889,85 @@
                 <button type="button" class="btn btn-secondary" onclick="closeReplaceMediaModal()">Cancel</button>
                 <button type="submit" class="btn btn-warning" id="replaceMediaBtn">
                     <i class="fas fa-exchange-alt"></i> Replace Media
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Admin Notes Modal -->
+<div id="adminNotesModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="fas fa-sticky-note"></i> Admin Notes for User</h3>
+            <span class="close" onclick="closeAdminNotesModal()">&times;</span>
+        </div>
+        
+        <div class="admin-notes-info">
+            <div class="info-icon">
+                <i class="fas fa-info-circle"></i>
+            </div>
+            <div class="info-content">
+                <p><strong>For Project Creators:</strong> These notes will be visible to the project owner below their project description. Use this to provide feedback, suggestions, or requirements for project improvements.</p>
+            </div>
+        </div>
+        
+        <form id="adminNotesForm" onsubmit="saveAdminNotes(event)">
+            <div class="form-group">
+                <label for="adminNotesText">Notes for User:</label>
+                <textarea 
+                    id="adminNotesText" 
+                    name="admin_notes" 
+                    placeholder="Enter notes for the project creator. These notes will be visible to the user and may indicate areas for improvement or revision..."
+                    maxlength="2000"
+                    required></textarea>
+                <small class="character-count">
+                    Characters: <span id="adminNotesCharCount">0</span>/2000
+                </small>
+            </div>
+            
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeAdminNotesModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Save Notes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Admin Notes Modal -->
+<div id="adminNotesModal" class="modal">
+    <div class="modal-content">
+        <h3><i class="fas fa-sticky-note"></i> Admin Notes for User</h3>
+        <form id="adminNotesForm" onsubmit="saveAdminNotes(event)">
+            <div class="form-group">
+                <label for="adminNotesText">Notes for the project owner:</label>
+                <textarea 
+                    id="adminNotesText" 
+                    name="adminNotes" 
+                    placeholder="Enter notes that will be visible to the project owner..."
+                    rows="6"
+                    maxlength="2000"
+                ></textarea>
+                <small class="character-count">
+                    <span id="adminNotesCharCount">0</span> / 2000 characters
+                </small>
+            </div>
+            
+            <div class="admin-notes-info">
+                <div class="info-icon">
+                    <i class="fas fa-info-circle"></i>
+                </div>
+                <div class="info-content">
+                    <p><strong>Note:</strong> Adding admin notes without approving the project will show "Reviewed, Pending Revisions" status to the user.</p>
+                </div>
+            </div>
+            
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeAdminNotesModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> Save Notes
                 </button>
             </div>
         </form>

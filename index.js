@@ -836,7 +836,7 @@ app.get('/api/projects', async (req, res) => {
     }
     
     const projects = await executeQuery(query, params);
-    
+
     // Map the results to include proper field names
     const mappedProjects = projects.map(project => ({
       ProjectID: project.ProjectID,
@@ -852,9 +852,10 @@ app.get('/api/projects', async (req, res) => {
       DateApproved: project.DateApproved,
       ImageID: project.image_id,
       ImageURL: project.file_url || (project.file_path ? `/uploads/${path.relative(uploadsDir, project.file_path).replace(/\\/g, '/')}` : null),
-      ImageName: project.media_display_name || project.file_name
+      ImageName: project.media_display_name || project.file_name,
+      admin_notes: project.admin_notes // Include admin notes for status determination
     }));
-    
+
     res.json({ success: true, data: mappedProjects });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error fetching projects', error: error.message });
@@ -1034,7 +1035,8 @@ app.get('/api/projects/:id', async (req, res) => {
       DateApproved: project.DateApproved,
       ImageID: project.image_id, // Map image_id to ImageID
       ImageURL: project.file_url || (project.file_path ? `/uploads/${path.relative(uploadsDir, project.file_path).replace(/\\/g, '/')}` : null), // Use file_url or construct from file_path
-      ImageName: project.media_display_name || project.file_name
+      ImageName: project.media_display_name || project.file_name,
+      admin_notes: project.admin_notes // Include admin notes
     };
     
     console.log('🔍 Response data being sent:', responseData);
@@ -1179,6 +1181,116 @@ app.put('/api/admin/projects/:id/approve', async (req, res) => {
   } catch (error) {
     console.error('Error updating project approval:', error);
     res.status(500).json({ success: false, message: 'Error updating project approval', error: error.message });
+  }
+});
+
+// Admin Notes Management API Routes
+app.put('/api/admin/projects/:id/notes', async (req, res) => {
+  try {
+    const projectId = req.params.id;
+    const { admin_notes, user_id } = req.body;
+    
+    console.log('📝 ADMIN NOTES: PUT /api/admin/projects/:id/notes received:', {
+      projectId,
+      admin_notes: admin_notes ? admin_notes.substring(0, 100) + '...' : admin_notes,
+      user_id
+    });
+    
+    if (!user_id) {
+      return res.status(400).json({ success: false, message: 'User ID is required' });
+    }
+    
+    // Check if user is admin
+    const userResult = await executeQuery('SELECT isAdmin FROM user WHERE UserID = ?', [user_id]);
+    if (userResult.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    
+    if (!userResult[0].isAdmin) {
+      return res.status(403).json({ success: false, message: 'Admin access required' });
+    }
+    
+    // Check if project exists
+    const projectResult = await executeQuery('SELECT ProjectID FROM project WHERE ProjectID = ?', [projectId]);
+    if (projectResult.length === 0) {
+      return res.status(404).json({ success: false, message: 'Project not found' });
+    }
+    
+    // Update admin notes
+    const result = await executeQuery(
+      'UPDATE project SET admin_notes = ? WHERE ProjectID = ?',
+      [admin_notes || null, projectId]
+    );
+    
+    if (result.affectedRows > 0) {
+      // If admin added notes but didn't approve, update status to show "Reviewed, Pending Revisions"
+      if (admin_notes && admin_notes.trim()) {
+        await executeQuery(
+          'UPDATE project SET Approved = 0, NeedsReview = 1 WHERE ProjectID = ?',
+          [projectId]
+        );
+        console.log('📝 ADMIN NOTES: Project status updated to "Reviewed, Pending Revisions"');
+      }
+      
+      console.log('📝 ADMIN NOTES: Notes updated successfully for project', projectId);
+      res.json({ 
+        success: true, 
+        message: 'Admin notes updated successfully',
+        hasNotes: !!(admin_notes && admin_notes.trim())
+      });
+    } else {
+      res.status(500).json({ success: false, message: 'Failed to update admin notes' });
+    }
+    
+  } catch (error) {
+    console.error('Error updating admin notes:', error);
+    res.status(500).json({ success: false, message: 'Error updating admin notes', error: error.message });
+  }
+});
+
+// Get admin notes for a project
+app.get('/api/admin/projects/:id/notes', async (req, res) => {
+  try {
+    const projectId = req.params.id;
+    const { user_id } = req.query;
+    
+    if (!user_id) {
+      return res.status(400).json({ success: false, message: 'User ID is required' });
+    }
+    
+    // Check if user is admin
+    const userResult = await executeQuery('SELECT isAdmin FROM user WHERE UserID = ?', [user_id]);
+    if (userResult.length === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    
+    if (!userResult[0].isAdmin) {
+      return res.status(403).json({ success: false, message: 'Admin access required' });
+    }
+    
+    // Get project with admin notes
+    const projectResult = await executeQuery(
+      'SELECT ProjectID, ProjectName, admin_notes FROM project WHERE ProjectID = ?', 
+      [projectId]
+    );
+    
+    if (projectResult.length === 0) {
+      return res.status(404).json({ success: false, message: 'Project not found' });
+    }
+    
+    const project = projectResult[0];
+    res.json({ 
+      success: true, 
+      data: {
+        projectId: project.ProjectID,
+        projectName: project.ProjectName,
+        admin_notes: project.admin_notes
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error fetching admin notes:', error);
+    res.status(500).json({ success: false, message: 'Error fetching admin notes', error: error.message });
   }
 });
 

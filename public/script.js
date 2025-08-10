@@ -1014,6 +1014,34 @@ async function viewProject(projectID) {
             statusElement.textContent = statusLabel;
             console.log('📊 Status set to:', statusLabel);
             
+            // Handle admin notes display
+            const adminNotesSection = document.getElementById('adminNotesSection');
+            const adminNotesContent = document.getElementById('viewProjectAdminNotes');
+            
+            if (project.admin_notes && project.admin_notes.trim() !== '') {
+                // Show admin notes if they exist
+                if (adminNotesSection) {
+                    adminNotesSection.style.display = 'block';
+                    if (adminNotesContent) {
+                        adminNotesContent.textContent = project.admin_notes;
+                    }
+                }
+                console.log('📝 Admin notes displayed');
+                
+                // Update status if project has admin notes but is not approved
+                if (!project.Approved && project.admin_notes) {
+                    statusElement.className = 'project-status status-review';
+                    statusElement.textContent = 'Reviewed, Pending Revisions';
+                    console.log('📊 Status updated to: Reviewed, Pending Revisions');
+                }
+            } else {
+                // Hide admin notes section if no notes
+                if (adminNotesSection) {
+                    adminNotesSection.style.display = 'none';
+                }
+                console.log('📝 No admin notes to display');
+            }
+            
             // Handle project image
             const imageContainer = document.getElementById('viewProjectImageContainer');
             const noImageContainer = document.getElementById('viewProjectNoImage');
@@ -1075,9 +1103,25 @@ async function viewProject(projectID) {
                 isAdmin: isAdmin
             });
             
-            // Get the Edit Project button and Add Topic button
+            // Get the Edit Project button, Add Topic button, and Admin Notes button
             const editProjectBtn = document.querySelector('#viewProjectModal .btn-primary');
             const addTopicBtn = document.getElementById('addTopicBtn');
+            const adminNotesBtn = document.getElementById('adminNotesBtn');
+            
+            // Handle admin notes button visibility
+            if (isAdmin && !isOwnProject) {
+                // Show admin notes button for admins viewing other users' projects
+                if (adminNotesBtn) {
+                    adminNotesBtn.style.display = 'inline-block';
+                    // Store project ID for admin notes modal
+                    window.currentAdminNotesProjectId = projectID;
+                }
+            } else {
+                // Hide admin notes button for non-admins or when viewing own projects
+                if (adminNotesBtn) {
+                    adminNotesBtn.style.display = 'none';
+                }
+            }
             
             if (isAdmin && !isOwnProject) {
                 // Admin viewing another user's project - show view-only mode
@@ -2121,9 +2165,14 @@ async function loadDashboardData() {
                     // Determine status class and label
                     let statusClass = 'project-status-pending';
                     let statusLabel = 'Pending';
+                    
                     if (project.Approved) {
                         statusClass = 'project-status-approved';
                         statusLabel = 'Approved';
+                    } else if (project.admin_notes && project.admin_notes.trim() !== '') {
+                        // If project has admin notes but is not approved, show "Reviewed, Pending Revisions"
+                        statusClass = 'project-status-review-yellow';
+                        statusLabel = 'Reviewed, Pending Revisions';
                     } else if (project.NeedsReview) {
                         statusClass = 'project-status-review-yellow';
                         statusLabel = 'Needs Review';
@@ -2321,6 +2370,9 @@ async function loadAdminProjects() {
                                     <div class="project-card-actions admin-actions">
                                         <button class="project-card-btn project-card-btn-primary" onclick="viewProject(${project.ProjectID})" title="View Project">
                                             <i class="fas fa-eye"></i> View
+                                        </button>
+                                        <button class="project-card-btn project-card-btn-info" onclick="openAdminNotesModalForProject(${project.ProjectID})" title="Add/Edit Notes for User">
+                                            <i class="fas fa-sticky-note"></i> Notes for User
                                         </button>
                                         ${project.Approved === 1 ? 
                                             `<button class="project-card-btn project-card-btn-warning" onclick="adminApproveProject(${project.ProjectID}, '${project.ProjectName.replace(/'/g, '\\\'')}')" title="Unapprove Project">
@@ -7256,3 +7308,165 @@ window.toggleTopic = toggleTopic;
 window.togglePOI = togglePOI;
 window.toggleCard = toggleCard;
 window.previewCardMedia = previewCardMedia;
+
+// ========== Admin Notes Functions ==========
+
+// Open admin notes modal
+function openAdminNotesModal() {
+    const projectId = window.currentAdminNotesProjectId;
+    if (!projectId) {
+        showNotification('No project selected for admin notes', 'error');
+        return;
+    }
+    
+    // Load existing admin notes
+    loadAdminNotes(projectId);
+    
+    // Show modal
+    const modal = document.getElementById('adminNotesModal');
+    if (modal) {
+        modal.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+    }
+    
+    // Setup character counter
+    const textarea = document.getElementById('adminNotesText');
+    const charCount = document.getElementById('adminNotesCharCount');
+    
+    if (textarea && charCount) {
+        // Update character count on input
+        textarea.addEventListener('input', function() {
+            charCount.textContent = this.value.length;
+        });
+        
+        // Initial count
+        charCount.textContent = textarea.value.length;
+    }
+}
+
+// Open admin notes modal for a specific project (from admin view)
+function openAdminNotesModalForProject(projectId) {
+    // Set the project ID for the modal
+    window.currentAdminNotesProjectId = projectId;
+    
+    // Open the modal
+    openAdminNotesModal();
+}
+
+// Close admin notes modal
+function closeAdminNotesModal() {
+    const modal = document.getElementById('adminNotesModal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }
+    
+    // Clear form
+    const form = document.getElementById('adminNotesForm');
+    if (form) {
+        form.reset();
+    }
+    
+    // Reset character count
+    const charCount = document.getElementById('adminNotesCharCount');
+    if (charCount) {
+        charCount.textContent = '0';
+    }
+}
+
+// Load existing admin notes for a project
+async function loadAdminNotes(projectId) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/admin/projects/${projectId}/notes`);
+        const result = await response.json();
+        
+        if (result.success && result.data && result.data.admin_notes) {
+            const textarea = document.getElementById('adminNotesText');
+            const charCount = document.getElementById('adminNotesCharCount');
+            
+            if (textarea) {
+                textarea.value = result.data.admin_notes;
+                
+                if (charCount) {
+                    charCount.textContent = result.data.admin_notes.length;
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error loading admin notes:', error);
+        showNotification('Error loading existing admin notes', 'error');
+    }
+}
+
+// Save admin notes
+async function saveAdminNotes(event) {
+    event.preventDefault();
+    
+    const projectId = window.currentAdminNotesProjectId;
+    if (!projectId) {
+        showNotification('No project selected for admin notes', 'error');
+        return;
+    }
+    
+    const textarea = document.getElementById('adminNotesText');
+    if (!textarea) {
+        showNotification('Could not find admin notes text field', 'error');
+        return;
+    }
+    
+    const adminNotes = textarea.value.trim();
+    
+    // Get current user info
+    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+    console.log('📝 ADMIN NOTES DEBUG: currentUser from localStorage:', currentUser);
+    
+    if (!currentUser || !currentUser.id) {
+        showNotification('User authentication required', 'error');
+        console.error('📝 ADMIN NOTES ERROR: No valid user found:', currentUser);
+        return;
+    }
+    
+    console.log('📝 ADMIN NOTES DEBUG: Using user ID:', currentUser.id);
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/admin/projects/${projectId}/notes`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                admin_notes: adminNotes,
+                user_id: currentUser.id
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showNotification('Admin notes saved successfully', 'success');
+            closeAdminNotesModal();
+            
+            // Refresh the view project modal to show updated notes if it's currently open
+            if (window.currentViewingProjectId === projectId) {
+                await viewProject(projectId);
+            }
+            
+            // Refresh the admin projects view if we're in admin mode
+            const adminSection = document.getElementById('admin-projects-section');
+            if (adminSection && adminSection.style.display !== 'none') {
+                await loadAdminProjects();
+            }
+        } else {
+            showNotification(result.error || 'Failed to save admin notes', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving admin notes:', error);
+        showNotification('Error occurred while saving admin notes', 'error');
+    }
+}
+
+// Make admin notes functions globally available
+window.openAdminNotesModal = openAdminNotesModal;
+window.openAdminNotesModalForProject = openAdminNotesModalForProject;
+window.closeAdminNotesModal = closeAdminNotesModal;
+window.saveAdminNotes = saveAdminNotes;
