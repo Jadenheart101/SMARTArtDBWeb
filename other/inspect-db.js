@@ -1,4 +1,4 @@
-const { executeQuery, testConnection } = require('./database');
+const { executeQuery, testConnection } = require('../database');
 require('dotenv').config();
 
 async function inspectDatabase() {
